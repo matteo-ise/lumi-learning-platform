@@ -75,9 +75,16 @@ export function AppPage() {
       <header className="bg-white shadow-sm px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="text-3xl">{avatarEmoji}</span>
-          <span className="text-xl font-bold text-primary">LUMI</span>
+          <span className="text-xl font-extrabold text-primary tracking-tight">LUMI</span>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={openSubjectModal}
+            title="Fächer anpassen"
+            className="flex items-center justify-center w-9 h-9 rounded-xl bg-primary/10 text-primary font-bold text-xl hover:bg-primary/20 transition-all"
+          >
+            +
+          </button>
           <button
             onClick={() => navigate('/app/wizard')}
             title="Einstellungen"
@@ -98,7 +105,6 @@ export function AppPage() {
 
       {/* Greeting */}
       <div className="max-w-2xl mx-auto px-6 pt-10 text-center">
-        <div className="text-6xl mb-4">{avatarEmoji}</div>
         <h1 className="text-3xl font-extrabold text-dark mb-2">
           Hallo {greeting.name}! 🌟
         </h1>
@@ -114,13 +120,6 @@ export function AppPage() {
       <div className="max-w-3xl mx-auto px-6 pt-10 pb-16">
         <div className="flex items-center justify-center gap-3 mb-6">
           <h2 className="text-xl font-bold text-dark">Wähle ein Fach</h2>
-          <button
-            onClick={openSubjectModal}
-            title="Fächer anpassen"
-            className="w-10 h-10 rounded-full bg-primary text-white text-xl font-bold shadow-md hover:bg-primary/90 hover:scale-105 transition-all flex items-center justify-center"
-          >
-            +
-          </button>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {subjects.map((s) => {

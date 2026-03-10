@@ -20,7 +20,7 @@ Die LUMI-Homepage ist der Einstiegspunkt fuer Schueler, Eltern und Lehrkraefte: 
 | **Frontend**     | React (Vite)          | Schneller Build, Komponenten-basiert      |
 | **Styling**      | TailwindCSS           | Schnelle Iteration, sieht sofort gut aus  |
 | **Backend**      | FastAPI (Python)       | Minimaler Code, automatische API-Docs     |
-| **LLM**          | Google Gemini 2.0 Flash | Kostenlos (Free Tier), Vision + Text    |
+| **LLM**          | Google Gemini 2.5 Flash | Kostenlos (Free Tier), Vision + Text    |
 | **Datenbank**    | SQLite                | Eine Datei, kein Setup noetig             |
 | **Hosting**      | Lokal (Pitch) / GitHub Pages + Azure Student (spaeter) | Kostenlos |
 

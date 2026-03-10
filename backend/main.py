@@ -1,3 +1,4 @@
+import base64
 import os
 import sqlite3
 import traceback
@@ -84,6 +85,7 @@ def init_db():
     for migration in [
         "ALTER TABLE profiles ADD COLUMN federal_state TEXT DEFAULT ''",
         "ALTER TABLE profiles ADD COLUMN selected_subjects TEXT DEFAULT ''",
+        "ALTER TABLE messages ADD COLUMN image_base64 TEXT",
     ]:
         try:
             conn.execute(migration)
@@ -183,7 +185,7 @@ def root():
 @app.get("/api/test-gemini")
 async def test_gemini():
     response = gemini_client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-3-flash-preview",
         contents="Sag kurz Hallo und stell dich als LUMI vor – ein freundlicher Lerntutor.",
     )
     return {"response": response.text}
@@ -452,28 +454,63 @@ def build_system_prompt(profile, course) -> str:
 
 def get_chat_history(conn, course_id: int, limit: int = 50) -> list[dict]:
     rows = conn.execute(
-        "SELECT role, content FROM messages WHERE course_id = ? ORDER BY created_at DESC LIMIT ?",
+        "SELECT role, content, image_base64 FROM messages WHERE course_id = ? ORDER BY created_at DESC LIMIT ?",
         (course_id, limit),
     ).fetchall()
-    return [{"role": r["role"], "parts": [{"text": r["content"]}]} for r in reversed(rows)]
+    return [dict(r) for r in reversed(rows)]
 
 
-def send_to_gemini(system_prompt: str, history: list[dict], user_message: str) -> str:
+def send_to_gemini(system_prompt: str, history: list[dict], user_message: str, image_base64: str | None = None) -> str:
     contents = []
     # Add history
     for msg in history:
+        parts = [genai.types.Part(text=msg["content"])]
+        
+        img_b64 = msg.get("image_base64")
+        if img_b64:
+            hist_mime_type = "image/jpeg"
+            if "," in img_b64:
+                header, img_b64 = img_b64.split(",", 1)
+                if "image/png" in header: hist_mime_type = "image/png"
+                elif "image/webp" in header: hist_mime_type = "image/webp"
+            try:
+                hist_image_data = base64.b64decode(img_b64)
+                parts.append(genai.types.Part.from_bytes(data=hist_image_data, mime_type=hist_mime_type))
+            except Exception as e:
+                print(f"History base64 decode error: {e}")
+                
         contents.append(genai.types.Content(
-            role=msg["role"] if msg["role"] == "user" else "model",
-            parts=[genai.types.Part(text=msg["parts"][0]["text"])],
+            role="user" if msg["role"] == "user" else "model",
+            parts=parts,
         ))
+    
+    # Build parts for the current message
+    user_parts = [genai.types.Part(text=user_message)]
+    
+    if image_base64:
+        # Detect mime type or assume image/jpeg
+        mime_type = "image/jpeg"
+        if "," in image_base64:
+            header, image_base64 = image_base64.split(",", 1)
+            if "image/png" in header: mime_type = "image/png"
+            elif "image/webp" in header: mime_type = "image/webp"
+        
+        try:
+            image_data = base64.b64decode(image_base64)
+            user_parts.append(genai.types.Part.from_bytes(data=image_data, mime_type=mime_type))
+            # Add vision-specific hint
+            user_parts[0].text = f"[BILD] {user_message}"
+        except Exception as e:
+            print(f"Base64 decode error: {e}")
+
     # Add new user message
     contents.append(genai.types.Content(
         role="user",
-        parts=[genai.types.Part(text=user_message)],
+        parts=user_parts,
     ))
 
     response = gemini_client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-3-flash-preview",
         contents=contents,
         config=genai.types.GenerateContentConfig(
             system_instruction=system_prompt,
@@ -517,7 +554,7 @@ def get_messages(course_id: int, user_id: int = Depends(get_current_user_id)):
         conn.close()
         raise HTTPException(status_code=404, detail="Kurs nicht gefunden")
     rows = conn.execute(
-        "SELECT role, content, created_at FROM messages WHERE course_id = ? ORDER BY created_at ASC",
+        "SELECT role, content, image_base64, created_at FROM messages WHERE course_id = ? ORDER BY created_at ASC",
         (course_id,),
     ).fetchall()
     conn.close()
@@ -542,19 +579,23 @@ def chat(body: ChatRequest, user_id: int = Depends(get_current_user_id)):
     history = get_chat_history(conn, body.course_id)
 
     try:
-        ai_response = send_to_gemini(system_prompt, history, body.message)
+        ai_response = send_to_gemini(system_prompt, history, body.message, body.image_base64)
     except Exception as e:
         conn.close()
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Gemini-Fehler: {e}")
 
     # Save messages
+    user_content = body.message
+    if body.image_base64:
+        user_content = f"📸 [Bild gesendet] {body.message}"
+
     conn.execute(
-        "INSERT INTO messages (course_id, user_id, role, content) VALUES (?, ?, 'user', ?)",
-        (body.course_id, user_id, body.message),
+        "INSERT INTO messages (course_id, user_id, role, content, image_base64) VALUES (?, ?, 'user', ?, ?)",
+        (body.course_id, user_id, user_content, body.image_base64),
     )
     conn.execute(
-        "INSERT INTO messages (course_id, user_id, role, content) VALUES (?, ?, 'assistant', ?)",
+        "INSERT INTO messages (course_id, user_id, role, content, image_base64) VALUES (?, ?, 'assistant', ?, NULL)",
         (body.course_id, user_id, ai_response),
     )
     conn.commit()
@@ -568,6 +609,8 @@ def chat_hotkey(body: HotkeyRequest, user_id: int = Depends(get_current_user_id)
         "NEXT_STEP": "[HOTKEY:NEXT_STEP] Ich habe verstanden, zeige mir den naechsten Schritt.",
         "SIMPLIFY": "[HOTKEY:SIMPLIFY] Ich habe das nicht verstanden, erklaere es einfacher.",
         "EXAMPLE": "[HOTKEY:EXAMPLE] Zeig mir bitte ein konkretes Beispiel dazu.",
+        "MORE_EXAMPLE": "[HOTKEY:MORE_EXAMPLE] Kannst du mir noch ein weiteres Beispiel geben?",
+        "NEW_TOPIC": "[HOTKEY:NEW_TOPIC] Lass uns ein anderes Thema anschauen.",
     }
     message = hotkey_messages.get(body.hotkey_type)
     if not message:

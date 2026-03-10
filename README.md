@@ -1,6 +1,6 @@
 # LUMI – KI-Lernplattform
 
-KI-gestuetzte Nachhilfeplattform fuer Schueler (Klassen 5–10) mit personalisiertem Tutoring, Bilderkennung und Gamification.
+KI-gestuetzte Nachhilfeplattform fuer Schueler (Klassen 1–4) mit personalisiertem Tutoring, Bilderkennung und Gamification.
 
 ## Tech-Stack
 
@@ -8,7 +8,7 @@ KI-gestuetzte Nachhilfeplattform fuer Schueler (Klassen 5–10) mit personalisie
 | ---------------- | -------------------------- |
 | Frontend         | React (Vite) + TailwindCSS |
 | Backend          | FastAPI (Python)            |
-| LLM + Vision     | Google Gemini 2.0 Flash     |
+| LLM + Vision     | Google Gemini 2.5 Flash     |
 | Datenbank        | SQLite                      |
 
 ## Quickstart

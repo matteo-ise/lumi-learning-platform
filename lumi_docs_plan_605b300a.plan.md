@@ -1,6 +1,6 @@
 ---
 name: LUMI Lernplattform – Vollstaendige Umsetzung
-overview: "Sprint-by-Sprint Implementierung der LUMI KI-Lernplattform. Monorepo mit React (Vite) Frontend + FastAPI Backend + Google Gemini 2.0 Flash. SSOT: docs/01-homepage-landing.md (Homepage, Auth, UI) und docs/02-ki-chat.md (KI-Chat, Wizard, Gamification). Regel: Sprint N+1 darf erst beginnen wenn Sprint N abgeschlossen ist."
+overview: "Sprint-by-Sprint Implementierung der LUMI KI-Lernplattform. Monorepo mit React (Vite) Frontend + FastAPI Backend + Google Gemini 2.5 Flash. SSOT: docs/01-homepage-landing.md (Homepage, Auth, UI) und docs/02-ki-chat.md (KI-Chat, Wizard, Gamification). Regel: Sprint N+1 darf erst beginnen wenn Sprint N abgeschlossen ist."
 todos:
   - id: sprint-1
     content: "Sprint 1: Projektsetup & Grundgeruest – Git init, .gitignore, Vite+React+TS+Tailwind Frontend scaffolden, Nunito Font, FastAPI Backend mit main.py + requirements.txt, .env mit GEMINI_API_KEY, Test-Endpoint /api/test-gemini, CORS konfigurieren, beide lokal startbar"
@@ -9,7 +9,7 @@ todos:
     content: "Sprint 2: Landingpage + Login + Routing – React Router (/, /login, /app, /app/wizard, /app/kurs/:id/chat, /app/blast), Landingpage (Hero, Features, So funktionierts, Footer), Login-Seite, Backend Auth-Endpoints (POST /api/auth/login + /register mit JWT), Demo-Account (lena@demo.de / 1234), SQLite users Tabelle, useAuth Hook, Protected Routes, Redirect-Logik (wizard_completed)"
     status: completed
   - id: sprint-3
-    content: "Sprint 3: Onboarding-Wizard + Dashboard – Multi-Step Wizard (Name, Tier-Avatar aus 8 Tieren, Klassenstufe, Lerntyp+Lernziel), POST /api/profile/wizard Endpoint, Meta-Prompt Generierung, Dashboard UI (Avatar + Hallo Name + Fun-Spruch + Streak + Faecher-Bubbles im Wassertropfen-Design), GET /api/greeting Endpoint, 30+ Fun-Sprueche Rotation"
+    content: "Sprint 3: Onboarding-Wizard + Dashboard – Multi-Step Wizard (Name, Tier-Avatar aus 8 Tieren, Klassenstufe 1-4, Lerntyp+Lernziel), POST /api/profile/wizard Endpoint, Meta-Prompt Generierung, Dashboard UI (Avatar + Hallo Name + Fun-Spruch + Streak + Faecher-Bubbles im Wassertropfen-Design), GET /api/greeting Endpoint, 30+ Fun-Sprueche Rotation"
     status: in_progress
   - id: sprint-4
     content: "Sprint 4: KI-Chat Kern – Kurs-Erstellung mit Lueckentext-Prompt, GET+POST /api/courses, Chat UI (Nachrichtenverlauf + Input), HotKey-Buttons (Verstanden/Nicht verstanden/Beispiel/Bild), System-Prompt mit 3-Schritte-Methode (Grundlagen→Vertiefung→Uebung), Lehrplan-Kontext aus knowledge/ laden, POST /api/chat + /api/chat/hotkey Endpoints, Chat-Verlauf in SQLite messages Tabelle, Markdown-Rendering mit react-markdown"

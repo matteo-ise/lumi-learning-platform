@@ -2,7 +2,7 @@
 
 ## 1. Projektziel
 
-Das Herzstueck der LUMI-Plattform: ein **KI-Chat**, der Schuelern (Klassen 5–10) beim Lernen hilft. Kein RAG, sondern **Gemini Vision** fuer Bilderkennung + **Lehrplan-Kontext als System-Prompt**.
+Das Herzstueck der LUMI-Plattform: ein **KI-Chat**, der Schuelern (Klassen 1–4) beim Lernen hilft. Kein RAG, sondern **Gemini Vision** fuer Bilderkennung + **Lehrplan-Kontext als System-Prompt**.
 
 **Kernfunktionen:**
 
@@ -40,7 +40,7 @@ Das Herzstueck der LUMI-Plattform: ein **KI-Chat**, der Schuelern (Klassen 5–1
 | Was                  | Technologie              | Warum                                |
 | -------------------- | ------------------------ | ------------------------------------ |
 | **Backend**          | FastAPI (Python)         | Minimaler Code, automatische Docs     |
-| **LLM + Vision**     | Google Gemini 2.0 Flash  | Kostenlos (Free Tier), Text + Bild    |
+| **LLM + Vision**     | Google Gemini 2.5 Flash  | Kostenlos (Free Tier), Text + Bild    |
 | **Frontend**         | React (Vite) + Tailwind  | Schnell, sieht gut aus                |
 | **Blast Game**       | HTML5 Canvas             | Nativ im Browser, kein Framework      |
 | **STT / TTS**        | Web Speech API (Browser) | Kostenlos, kein Server noetig         |
@@ -50,7 +50,7 @@ Das Herzstueck der LUMI-Plattform: ein **KI-Chat**, der Schuelern (Klassen 5–1
 
 ### Warum Gemini statt OpenAI?
 
-| Kriterium       | Gemini 2.0 Flash  | OpenAI GPT-4o     |
+| Kriterium       | Gemini 2.5 Flash  | OpenAI GPT-4o     |
 | --------------- | ------------------ | ------------------ |
 | **Free Tier**   | 15 RPM kostenlos   | Kein Free Tier     |
 | **Vision**      | Ja                 | Ja                 |
