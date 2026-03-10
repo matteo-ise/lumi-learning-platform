@@ -1,6 +1,6 @@
 fastapi
 uvicorn[standard]
-google-genai
-python-multipart
-pyjwt
 python-dotenv
+pyjwt
+google-genai
+psycopg2-binary
