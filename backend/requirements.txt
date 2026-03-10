@@ -4,3 +4,4 @@ python-dotenv
 pyjwt
 google-genai
 psycopg2-binary
+firebase-admin

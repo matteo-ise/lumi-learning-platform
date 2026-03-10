@@ -1,14 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
+import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged } from '../services/firebase'
 import { apiFetch } from '../services/api'
 
 interface User {
-  user_id: number
-  wizard_completed: boolean
-}
-
-interface LoginResponse {
-  token: string
-  user_id: number
+  uid: string
+  email: string | null
+  displayName: string | null
+  photoURL: string | null
   wizard_completed: boolean
 }
 
@@ -16,38 +14,69 @@ export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const token = localStorage.getItem('lumi_token')
-    const stored = localStorage.getItem('lumi_user')
-    if (token && stored) {
-      setUser(JSON.parse(stored))
+  const fetchProfile = useCallback(async (fbUser: any) => {
+    try {
+      // Fetch user profile from OUR backend
+      const profile = await apiFetch<{ wizard_completed?: boolean } | null>('/api/profile')
+      
+      setUser({
+        uid: fbUser.uid,
+        email: fbUser.email,
+        displayName: fbUser.displayName,
+        photoURL: fbUser.photoURL,
+        wizard_completed: !!profile?.wizard_completed
+      })
+    } catch (err) {
+      console.error("Profile fetch error:", err)
+      // If profile fetch fails (e.g. 401), set base user and wizard not completed
+      setUser({
+        uid: fbUser.uid,
+        email: fbUser.email,
+        displayName: fbUser.displayName,
+        photoURL: fbUser.photoURL,
+        wizard_completed: false
+      })
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [])
 
-  const login = useCallback(async (email: string, password: string) => {
-    const data = await apiFetch<LoginResponse>('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      if (fbUser) {
+        // Save token immediately for apiFetch to use
+        const token = await fbUser.getIdToken()
+        localStorage.setItem('lumi_token', token)
+        await fetchProfile(fbUser)
+      } else {
+        setUser(null)
+        localStorage.removeItem('lumi_token')
+        setLoading(false)
+      }
     })
-    localStorage.setItem('lumi_token', data.token)
-    const u: User = { user_id: data.user_id, wizard_completed: data.wizard_completed }
-    localStorage.setItem('lumi_user', JSON.stringify(u))
-    setUser(u)
-    return u
+
+    return () => unsubscribe()
+  }, [fetchProfile])
+
+  const loginWithGoogle = useCallback(async () => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider)
+      return result.user
+    } catch (err) {
+      console.error("Google Login Error:", err)
+      throw err
+    }
   }, [])
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    await signOut(auth)
     localStorage.removeItem('lumi_token')
-    localStorage.removeItem('lumi_user')
     setUser(null)
   }, [])
 
   const updateWizardCompleted = useCallback(() => {
     if (user) {
-      const updated = { ...user, wizard_completed: true }
-      localStorage.setItem('lumi_user', JSON.stringify(updated))
-      setUser(updated)
+      setUser({ ...user, wizard_completed: true })
     }
   }, [user])
 
@@ -55,7 +84,7 @@ export function useAuth() {
     user,
     loading,
     isAuthenticated: !!user,
-    login,
+    loginWithGoogle,
     logout,
     updateWizardCompleted,
   }
