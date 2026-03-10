@@ -37,17 +37,18 @@ const subjects = [
 ]
 
 export function AppPage() {
-  const { user, logout } = useAuth()
+  const { user, loading, logout } = useAuth()
   const navigate = useNavigate()
   const [greeting, setGreeting] = useState<Greeting | null>(null)
 
   useEffect(() => {
+    if (loading) return
     if (!user?.wizard_completed) {
       navigate('/app/wizard')
       return
     }
     apiFetch<Greeting>('/api/greeting').then(setGreeting).catch(console.error)
-  }, [user, navigate])
+  }, [user, loading, navigate])
 
   if (!greeting) {
     return (
@@ -67,12 +68,21 @@ export function AppPage() {
           <span className="text-3xl">{avatarEmoji}</span>
           <span className="text-xl font-bold text-primary">LUMI</span>
         </div>
-        <button
-          onClick={logout}
-          className="text-dark/50 hover:text-dark font-semibold transition-colors"
-        >
-          Logout
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate('/app/wizard')}
+            title="Profil bearbeiten"
+            className="text-dark/40 hover:text-primary transition-colors text-2xl"
+          >
+            ⚙️
+          </button>
+          <button
+            onClick={logout}
+            className="text-dark/50 hover:text-dark font-semibold transition-colors"
+          >
+            Logout
+          </button>
+        </div>
       </header>
 
       {/* Greeting */}

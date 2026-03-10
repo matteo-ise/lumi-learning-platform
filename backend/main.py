@@ -40,6 +40,7 @@ def init_db():
             name TEXT NOT NULL,
             avatar TEXT NOT NULL,
             grade INTEGER NOT NULL,
+            federal_state TEXT DEFAULT '',
             learning_type TEXT NOT NULL,
             learning_goal TEXT NOT NULL,
             meta_prompt TEXT NOT NULL,
@@ -78,6 +79,12 @@ def init_db():
         pw_hash = hashlib.sha256("1234".encode()).hexdigest()
         conn.execute("INSERT INTO users (email, password_hash) VALUES (?, ?)", ("lena@demo.de", pw_hash))
         conn.commit()
+    # Migrate: add federal_state column if missing (for existing DBs)
+    try:
+        conn.execute("ALTER TABLE profiles ADD COLUMN federal_state TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass  # Column already exists
     conn.close()
 
 
@@ -129,6 +136,15 @@ class AuthRequest(BaseModel):
     password: str
 
 
+class WizardRequest(BaseModel):
+    name: str
+    avatar: str
+    grade: int
+    federal_state: str
+    learning_type: str
+    learning_goal: str
+
+
 # ── Routes ──
 
 @app.get("/")
@@ -176,6 +192,52 @@ def login(body: AuthRequest):
         "user_id": user["id"],
         "wizard_completed": bool(user["wizard_completed"]),
     }
+
+
+LEARNING_TYPE_LABELS = {
+    'kurz': 'kurz & knapp → komm direkt auf den Punkt, keine langen Texte',
+    'ausfuehrlich': 'ausführlich → erkläre alles genau mit Zusammenhängen',
+    'beispiele': 'mit vielen Beispielen → zeige immer ein konkretes Beispiel',
+}
+
+LEARNING_GOAL_LABELS = {
+    'noten': 'bessere Noten',
+    'pruefung': 'Prüfung bestehen',
+    'neugier': 'aus Neugier lernen',
+}
+
+
+@app.post("/api/profile/wizard")
+def wizard(body: WizardRequest, user_id: int = Depends(get_current_user_id)):
+    lt = LEARNING_TYPE_LABELS.get(body.learning_type, body.learning_type)
+    lg = LEARNING_GOAL_LABELS.get(body.learning_goal, body.learning_goal)
+    meta_prompt = (
+        f"Der Schüler heißt {body.name}, Klasse {body.grade}, Bundesland {body.federal_state}. "
+        f"Lerntyp: {lt}. "
+        f"Lernziel: {lg}. "
+        f"Sprache: freundlich, ermutigend, altersgerecht."
+    )
+    conn = get_db()
+    existing = conn.execute("SELECT id FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
+    if existing:
+        conn.execute(
+            """UPDATE profiles SET name=?, avatar=?, grade=?, federal_state=?,
+               learning_type=?, learning_goal=?, meta_prompt=? WHERE user_id=?""",
+            (body.name, body.avatar, body.grade, body.federal_state,
+             body.learning_type, body.learning_goal, meta_prompt, user_id),
+        )
+    else:
+        conn.execute(
+            """INSERT INTO profiles (user_id, name, avatar, grade, federal_state,
+               learning_type, learning_goal, meta_prompt)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (user_id, body.name, body.avatar, body.grade, body.federal_state,
+             body.learning_type, body.learning_goal, meta_prompt),
+        )
+    conn.execute("UPDATE users SET wizard_completed = TRUE WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
 
 
 GREETINGS = [
