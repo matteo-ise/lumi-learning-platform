@@ -90,7 +90,7 @@ export function SubjectChatPage() {
 
   /** Sprint 5: Speech to Text (STT) */
   const startRecording = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitRecognition
     if (!SpeechRecognition) {
       alert('Spracherkennung wird von diesem Browser nicht unterstützt.')
       return
@@ -259,7 +259,7 @@ export function SubjectChatPage() {
       <div className="flex-1 flex overflow-hidden">
         {/* Left Timeline Sidebar */}
         {hasMessages && (
-          <div className="hidden sm:flex flex-col items-center w-24 pt-8 bg-gray-50 border-r border-gray-200 shrink-0">
+          <div className="hidden sm:flex flex-col items-center w-64 pt-8 bg-gray-50 border-r border-gray-200 shrink-0">
             <StepTimeline currentStep={currentStep > 0 ? currentStep : 1} />
           </div>
         )}
@@ -336,6 +336,9 @@ export function SubjectChatPage() {
             const isLastAssistant = isAssistant && i === messages.length - 1
             const isSpeaking = speakingMessageIndex === i
             
+            // Only show avatar if it's the first message from assistant in a row
+            const showAvatar = isAssistant && (i === 0 || messages[i - 1].role !== 'assistant')
+            
             // Clean markdown content
             const cleanMarkdown = msg.content.replace(/\[SCHRITT\s+\d\/\d\]/g, '')
 
@@ -353,7 +356,7 @@ export function SubjectChatPage() {
               <div key={i} className={`flex gap-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[80%] ${isUser ? 'order-1' : ''}`}>
                   <div className="flex items-center gap-2 mb-1">
-                    {isAssistant && <span className="text-lg">{avatarEmoji}</span>}
+                    {showAvatar && <span className="text-lg">{avatarEmoji}</span>}
                     {isAssistant && (
                       <button 
                         onClick={() => speak(msg.content, i)}
