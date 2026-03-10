@@ -8,6 +8,7 @@ import { StepTimeline } from '../components/StepTimeline'
 interface Message {
   role: 'user' | 'assistant' | 'error'
   content: string
+  image_base64?: string
 }
 
 const avatarEmojis: Record<string, string> = {

@@ -20,7 +20,8 @@
  */
 
 import { useState, useEffect } from 'react';
-import { MATH_TASKS, MathTask } from './math_tasks';
+import { MATH_TASKS } from './math_tasks';
+import type { MathTask } from './math_tasks';
 
 interface BlastGameProps {
   grade: number;
