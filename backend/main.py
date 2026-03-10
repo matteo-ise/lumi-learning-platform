@@ -1,5 +1,6 @@
 import os
 import sqlite3
+import traceback
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, date
 
@@ -79,12 +80,16 @@ def init_db():
         pw_hash = hashlib.sha256("1234".encode()).hexdigest()
         conn.execute("INSERT INTO users (email, password_hash) VALUES (?, ?)", ("lena@demo.de", pw_hash))
         conn.commit()
-    # Migrate: add federal_state column if missing (for existing DBs)
-    try:
-        conn.execute("ALTER TABLE profiles ADD COLUMN federal_state TEXT DEFAULT ''")
-        conn.commit()
-    except Exception:
-        pass  # Column already exists
+    # Migrations for existing DBs
+    for migration in [
+        "ALTER TABLE profiles ADD COLUMN federal_state TEXT DEFAULT ''",
+        "ALTER TABLE profiles ADD COLUMN selected_subjects TEXT DEFAULT ''",
+    ]:
+        try:
+            conn.execute(migration)
+            conn.commit()
+        except Exception:
+            pass  # Column already exists
     conn.close()
 
 
@@ -143,6 +148,29 @@ class WizardRequest(BaseModel):
     federal_state: str
     learning_type: str
     learning_goal: str
+    selected_subjects: list[str] = []
+
+
+class CourseRequest(BaseModel):
+    subject: str
+    topic: str
+    goal_type: str = ""
+    goal_deadline: str = ""
+
+
+class ChatRequest(BaseModel):
+    course_id: int
+    message: str
+    image_base64: str | None = None
+
+
+class HotkeyRequest(BaseModel):
+    course_id: int
+    hotkey_type: str  # NEXT_STEP, SIMPLIFY, EXAMPLE
+
+
+class ProfileSubjectsRequest(BaseModel):
+    selected_subjects: list[str] = []
 
 
 # ── Routes ──
@@ -155,7 +183,7 @@ def root():
 @app.get("/api/test-gemini")
 async def test_gemini():
     response = gemini_client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         contents="Sag kurz Hallo und stell dich als LUMI vor – ein freundlicher Lerntutor.",
     )
     return {"response": response.text}
@@ -217,22 +245,23 @@ def wizard(body: WizardRequest, user_id: int = Depends(get_current_user_id)):
         f"Lernziel: {lg}. "
         f"Sprache: freundlich, ermutigend, altersgerecht."
     )
+    selected = ",".join(body.selected_subjects) if body.selected_subjects else ""
     conn = get_db()
     existing = conn.execute("SELECT id FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
     if existing:
         conn.execute(
             """UPDATE profiles SET name=?, avatar=?, grade=?, federal_state=?,
-               learning_type=?, learning_goal=?, meta_prompt=? WHERE user_id=?""",
+               learning_type=?, learning_goal=?, meta_prompt=?, selected_subjects=? WHERE user_id=?""",
             (body.name, body.avatar, body.grade, body.federal_state,
-             body.learning_type, body.learning_goal, meta_prompt, user_id),
+             body.learning_type, body.learning_goal, meta_prompt, selected, user_id),
         )
     else:
         conn.execute(
             """INSERT INTO profiles (user_id, name, avatar, grade, federal_state,
-               learning_type, learning_goal, meta_prompt)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+               learning_type, learning_goal, meta_prompt, selected_subjects)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (user_id, body.name, body.avatar, body.grade, body.federal_state,
-             body.learning_type, body.learning_goal, meta_prompt),
+             body.learning_type, body.learning_goal, meta_prompt, selected),
         )
     conn.execute("UPDATE users SET wizard_completed = TRUE WHERE id = ?", (user_id,))
     conn.commit()
@@ -274,6 +303,95 @@ GREETINGS = [
 ]
 
 
+@app.get("/api/profile")
+def get_profile(user_id: int = Depends(get_current_user_id)):
+    conn = get_db()
+    profile = conn.execute(
+        "SELECT name, avatar, grade, federal_state, learning_type, learning_goal, selected_subjects FROM profiles WHERE user_id = ?",
+        (user_id,),
+    ).fetchone()
+    conn.close()
+    if not profile:
+        return None
+    d = dict(profile)
+    d["selected_subjects"] = [s for s in (d.get("selected_subjects") or "").split(",") if s]
+    return d
+
+
+@app.put("/api/profile/subjects")
+def update_profile_subjects(
+    body: ProfileSubjectsRequest,
+    user_id: int = Depends(get_current_user_id),
+):
+    """Update only the user's selected_subjects."""
+    selected = ",".join(body.selected_subjects) if body.selected_subjects else ""
+    conn = get_db()
+    existing = conn.execute("SELECT id FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
+    if existing:
+        conn.execute("UPDATE profiles SET selected_subjects = ? WHERE user_id = ?", (selected, user_id))
+    else:
+        # No profile yet – create minimal row (required fields from schema)
+        conn.execute(
+            """INSERT INTO profiles (user_id, name, avatar, grade, federal_state, learning_type, learning_goal, meta_prompt, selected_subjects)
+               VALUES (?, '', 'fox', 2, '', 'kurz', 'noten', '', ?)""",
+            (user_id, selected),
+        )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+SUBJECT_META = {
+    "mathe": {"label": "Mathe", "emoji": "🔢", "color": "blue"},
+    "deutsch": {"label": "Deutsch", "emoji": "📖", "color": "green"},
+    "englisch": {"label": "Englisch", "emoji": "🇬🇧", "color": "red"},
+    "sachunterricht": {"label": "Sachunterricht", "emoji": "🌍", "color": "amber"},
+    "kunst": {"label": "Kunst", "emoji": "🎨", "color": "purple"},
+    "musik": {"label": "Musik", "emoji": "🎵", "color": "pink"},
+    "sport": {"label": "Sport", "emoji": "⚽", "color": "teal"},
+    "religion_ethik": {"label": "Religion/Ethik", "emoji": "🕊️", "color": "indigo"},
+}
+
+
+@app.get("/api/subjects/all")
+def get_all_subjects(
+    grade: int | None = None,
+    user_id: int = Depends(get_current_user_id),
+):
+    """Returns ALL subjects that have knowledge files for the given grade (or user's profile grade)."""
+    if grade is None:
+        conn = get_db()
+        profile = conn.execute("SELECT grade FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
+        conn.close()
+        grade = profile["grade"] if profile else 2
+    available = []
+    for subj_id, meta in SUBJECT_META.items():
+        path = os.path.join(KNOWLEDGE_DIR, subj_id, f"klasse_{grade}.md")
+        if os.path.exists(path):
+            available.append({"id": subj_id, **meta})
+    return available
+
+
+@app.get("/api/subjects")
+def get_subjects(user_id: int = Depends(get_current_user_id)):
+    """Returns subjects filtered by user's selected_subjects preference."""
+    conn = get_db()
+    profile = conn.execute("SELECT grade, selected_subjects FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
+    conn.close()
+    grade = profile["grade"] if profile else 2
+    selected = [s for s in (profile["selected_subjects"] or "").split(",") if s] if profile else []
+    available = []
+    for subj_id, meta in SUBJECT_META.items():
+        path = os.path.join(KNOWLEDGE_DIR, subj_id, f"klasse_{grade}.md")
+        if not os.path.exists(path):
+            continue
+        # If user has a selection, only show those; otherwise show all available
+        if selected and subj_id not in selected:
+            continue
+        available.append({"id": subj_id, **meta})
+    return available
+
+
 @app.get("/api/greeting")
 def greeting(user_id: int = Depends(get_current_user_id)):
     conn = get_db()
@@ -293,3 +411,166 @@ def greeting(user_id: int = Depends(get_current_user_id)):
         "streak": profile["streak"] or 0,
         "greeting_message": GREETINGS[day_index % len(GREETINGS)],
     }
+
+
+# ── Chat helpers ──
+
+PROMPT_DIR = os.path.join(os.path.dirname(__file__), "prompts")
+KNOWLEDGE_DIR = os.path.join(os.path.dirname(__file__), "knowledge")
+
+
+def load_system_prompt():
+    path = os.path.join(PROMPT_DIR, "system_prompt.txt")
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+def load_knowledge(subject: str, grade: int) -> str:
+    path = os.path.join(KNOWLEDGE_DIR, subject, f"klasse_{grade}.md")
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    return ""
+
+
+def build_system_prompt(profile, course) -> str:
+    template = load_system_prompt()
+    knowledge = load_knowledge(course["subject"], profile["grade"])
+    goal_text = ""
+    if course["goal_type"]:
+        goal_text = f"{course['goal_type']}"
+        if course["goal_deadline"]:
+            goal_text += f" bis {course['goal_deadline']}"
+    return template.format(
+        lehrplan_kontext=knowledge or "Kein spezifischer Lehrplan-Kontext verfuegbar.",
+        meta_prompt=profile["meta_prompt"],
+        fach=course["subject"],
+        thema=course["topic"],
+        lernziel=goal_text or course["topic"],
+    )
+
+
+def get_chat_history(conn, course_id: int, limit: int = 50) -> list[dict]:
+    rows = conn.execute(
+        "SELECT role, content FROM messages WHERE course_id = ? ORDER BY created_at DESC LIMIT ?",
+        (course_id, limit),
+    ).fetchall()
+    return [{"role": r["role"], "parts": [{"text": r["content"]}]} for r in reversed(rows)]
+
+
+def send_to_gemini(system_prompt: str, history: list[dict], user_message: str) -> str:
+    contents = []
+    # Add history
+    for msg in history:
+        contents.append(genai.types.Content(
+            role=msg["role"] if msg["role"] == "user" else "model",
+            parts=[genai.types.Part(text=msg["parts"][0]["text"])],
+        ))
+    # Add new user message
+    contents.append(genai.types.Content(
+        role="user",
+        parts=[genai.types.Part(text=user_message)],
+    ))
+
+    response = gemini_client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=contents,
+        config=genai.types.GenerateContentConfig(
+            system_instruction=system_prompt,
+        ),
+    )
+    return response.text or ""
+
+
+# ── Course endpoints ──
+
+@app.post("/api/courses")
+def create_course(body: CourseRequest, user_id: int = Depends(get_current_user_id)):
+    conn = get_db()
+    cursor = conn.execute(
+        "INSERT INTO courses (user_id, subject, topic, goal_type, goal_deadline) VALUES (?, ?, ?, ?, ?)",
+        (user_id, body.subject, body.topic, body.goal_type, body.goal_deadline),
+    )
+    conn.commit()
+    course_id = cursor.lastrowid
+    conn.close()
+    return {"id": course_id, "subject": body.subject, "topic": body.topic}
+
+
+@app.get("/api/courses")
+def list_courses(user_id: int = Depends(get_current_user_id)):
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT id, subject, topic, goal_type, goal_deadline, created_at FROM courses WHERE user_id = ? ORDER BY created_at DESC",
+        (user_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+@app.get("/api/courses/{course_id}/messages")
+def get_messages(course_id: int, user_id: int = Depends(get_current_user_id)):
+    conn = get_db()
+    # Verify course belongs to user
+    course = conn.execute("SELECT * FROM courses WHERE id = ? AND user_id = ?", (course_id, user_id)).fetchone()
+    if not course:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Kurs nicht gefunden")
+    rows = conn.execute(
+        "SELECT role, content, created_at FROM messages WHERE course_id = ? ORDER BY created_at ASC",
+        (course_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+# ── Chat endpoints ──
+
+@app.post("/api/chat")
+def chat(body: ChatRequest, user_id: int = Depends(get_current_user_id)):
+    conn = get_db()
+    course = conn.execute("SELECT * FROM courses WHERE id = ? AND user_id = ?", (body.course_id, user_id)).fetchone()
+    if not course:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Kurs nicht gefunden")
+    profile = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
+    if not profile:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Profil nicht gefunden – bitte Wizard durchlaufen")
+
+    system_prompt = build_system_prompt(profile, course)
+    history = get_chat_history(conn, body.course_id)
+
+    try:
+        ai_response = send_to_gemini(system_prompt, history, body.message)
+    except Exception as e:
+        conn.close()
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Gemini-Fehler: {e}")
+
+    # Save messages
+    conn.execute(
+        "INSERT INTO messages (course_id, user_id, role, content) VALUES (?, ?, 'user', ?)",
+        (body.course_id, user_id, body.message),
+    )
+    conn.execute(
+        "INSERT INTO messages (course_id, user_id, role, content) VALUES (?, ?, 'assistant', ?)",
+        (body.course_id, user_id, ai_response),
+    )
+    conn.commit()
+    conn.close()
+    return {"response": ai_response}
+
+
+@app.post("/api/chat/hotkey")
+def chat_hotkey(body: HotkeyRequest, user_id: int = Depends(get_current_user_id)):
+    hotkey_messages = {
+        "NEXT_STEP": "[HOTKEY:NEXT_STEP] Ich habe verstanden, zeige mir den naechsten Schritt.",
+        "SIMPLIFY": "[HOTKEY:SIMPLIFY] Ich habe das nicht verstanden, erklaere es einfacher.",
+        "EXAMPLE": "[HOTKEY:EXAMPLE] Zeig mir bitte ein konkretes Beispiel dazu.",
+    }
+    message = hotkey_messages.get(body.hotkey_type)
+    if not message:
+        raise HTTPException(status_code=400, detail="Unbekannter Hotkey-Typ")
+    chat_req = ChatRequest(course_id=body.course_id, message=message)
+    return chat(chat_req, user_id)

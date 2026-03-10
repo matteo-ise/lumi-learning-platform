@@ -1,0 +1,12 @@
+# Mathe – Klasse 1
+- Zahlenraum bis 20: erkennen, ordnen, Vorgaenger/Nachfolger
+- Mengen vergleichen: mehr/weniger/gleich viel
+- Addition und Subtraktion bis 10, dann bis 20
+- Tauschaufgaben (3+4=4+3), Umkehraufgaben (5+3=8, 8-3=5)
+- Verdoppeln und Halbieren
+- Formen: Kreis, Dreieck, Viereck erkennen
+- Muster erkennen und fortsetzen
+- Laengen vergleichen (laenger/kuerzer)
+- Geld: Muenzen und Scheine kennen
+- Uhr: volle Stunden, Tageszeiten
+- Einfache Rechengeschichten

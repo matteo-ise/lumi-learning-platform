@@ -13,7 +13,7 @@ todos:
     status: in_progress
   - id: sprint-4
     content: "Sprint 4: KI-Chat Kern – Kurs-Erstellung mit Lueckentext-Prompt, GET+POST /api/courses, Chat UI (Nachrichtenverlauf + Input), HotKey-Buttons (Verstanden/Nicht verstanden/Beispiel/Bild), System-Prompt mit 3-Schritte-Methode (Grundlagen→Vertiefung→Uebung), Lehrplan-Kontext aus knowledge/ laden, POST /api/chat + /api/chat/hotkey Endpoints, Chat-Verlauf in SQLite messages Tabelle, Markdown-Rendering mit react-markdown"
-    status: pending
+    status: completed
   - id: sprint-5
     content: "Sprint 5: Bilderkennung + Spracheingabe – Bild-Upload UI im Chat (Datei-Auswahl + Vorschau), Base64 an Gemini Vision senden, Bilderkennungs-Prompt, Mikrofon-Button mit Web Speech API SpeechRecognition (STT), Lautsprecher-Button mit speechSynthesis (TTS, Emojis/Markdown entfernen)"
     status: pending

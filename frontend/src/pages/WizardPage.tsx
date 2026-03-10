@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { apiFetch } from '../services/api'
@@ -40,13 +40,21 @@ interface WizardData {
   federal_state: string
   learning_type: string
   learning_goal: string
+  selected_subjects: string[]
+}
+
+interface AvailableSubject {
+  id: string
+  label: string
+  emoji: string
 }
 
 export function WizardPage() {
   const navigate = useNavigate()
-  const { updateWizardCompleted } = useAuth()
+  const { user, updateWizardCompleted } = useAuth()
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
+  const [prefilling, setPrefilling] = useState(true)
   const [error, setError] = useState('')
 
   const [data, setData] = useState<WizardData>({
@@ -56,13 +64,36 @@ export function WizardPage() {
     federal_state: '',
     learning_type: '',
     learning_goal: '',
+    selected_subjects: [],
   })
+  const [availableSubjects, setAvailableSubjects] = useState<AvailableSubject[]>([])
+
+  // Load existing profile data when editing settings
+  useEffect(() => {
+    apiFetch<WizardData | null>('/api/profile')
+      .then((profile) => {
+        if (profile && profile.name) {
+          setData({ ...profile, selected_subjects: profile.selected_subjects || [] })
+        }
+      })
+      .catch(() => {})
+      .finally(() => setPrefilling(false))
+  }, [])
+
+  // Fetch available subjects when entering step 5 (by grade)
+  useEffect(() => {
+    if (step !== 5) return
+    apiFetch<AvailableSubject[]>(`/api/subjects/all?grade=${data.grade}`)
+      .then(setAvailableSubjects)
+      .catch(() => setAvailableSubjects([]))
+  }, [step, data.grade])
 
   const canNext = () => {
     if (step === 1) return data.name.trim().length > 0
     if (step === 2) return data.avatar !== ''
     if (step === 3) return data.federal_state !== ''
     if (step === 4) return data.learning_type !== '' && data.learning_goal !== ''
+    if (step === 5) return true // empty selection = show all
     return false
   }
 
@@ -83,10 +114,30 @@ export function WizardPage() {
     }
   }
 
-  const stepLabels = ['Name', 'Tier', 'Klasse', 'Lerntyp']
+  const isEditMode = !!user?.wizard_completed
+  const stepLabels = ['Name', 'Tier', 'Klasse', 'Lerntyp', 'Fächer']
+
+  if (prefilling) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray">
+        <p className="text-xl text-dark/50">Laden...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray flex flex-col items-center justify-center px-4 py-10">
+      {/* Back to dashboard (only in edit mode) */}
+      {isEditMode && (
+        <div className="w-full max-w-xl mb-3">
+          <button
+            onClick={() => navigate('/app')}
+            className="text-dark/50 hover:text-primary font-bold text-sm flex items-center gap-1 transition-colors"
+          >
+            ← Zurück zur Startseite
+          </button>
+        </div>
+      )}
       <div className="w-full max-w-xl bg-white rounded-3xl shadow-lg p-8">
 
         {/* Progress */}
@@ -249,6 +300,42 @@ export function WizardPage() {
           </div>
         )}
 
+        {/* Step 5: Subject selection */}
+        {step === 5 && (
+          <div>
+            <div className="text-center mb-5">
+              <div className="text-5xl mb-2">📚</div>
+              <h2 className="text-2xl font-extrabold text-dark">Deine Fächer</h2>
+              <p className="text-dark/60 text-sm mt-1">Welche Fächer sollen auf der Startseite erscheinen? Leer = alle.</p>
+            </div>
+            <div className="space-y-2 max-h-56 overflow-y-auto">
+              {availableSubjects.length === 0 && (
+                <p className="text-dark/50 text-sm py-2">Laden...</p>
+              )}
+              {availableSubjects.map((s) => (
+                <label
+                  key={s.id}
+                  className="flex items-center gap-3 p-3 rounded-xl border-2 border-gray-200 hover:border-primary/50 cursor-pointer transition-colors"
+                >
+                  <input
+                    type="checkbox"
+                    checked={data.selected_subjects.includes(s.id)}
+                    onChange={() => {
+                      const next = data.selected_subjects.includes(s.id)
+                        ? data.selected_subjects.filter((id) => id !== s.id)
+                        : [...data.selected_subjects, s.id]
+                      setData({ ...data, selected_subjects: next })
+                    }}
+                    className="w-5 h-5 rounded border-2 border-gray-300 text-primary focus:ring-primary"
+                  />
+                  <span className="text-2xl">{s.emoji}</span>
+                  <span className="font-bold text-dark">{s.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Error */}
         {error && (
           <p className="mt-4 text-red-500 text-sm text-center font-semibold">{error}</p>
@@ -264,7 +351,7 @@ export function WizardPage() {
               ← Zurück
             </button>
           )}
-          {step < 4 ? (
+          {step < 5 ? (
             <button
               onClick={() => setStep(step + 1)}
               disabled={!canNext()}
