@@ -44,7 +44,7 @@ KNOWLEDGE_DIR = os.path.join(os.path.dirname(__file__), "knowledge")
 PROMPT_DIR = os.path.join(os.path.dirname(__file__), "prompts")
 
 def get_db_conn():
-    if DATABASE_URL and DATABASE_URL.startswith("postgres"):
+    if DATABASE_URL and (DATABASE_URL.startswith("postgres") or DATABASE_URL.startswith("postgresql")):
         import psycopg2
         from psycopg2.extras import RealDictCursor
         conn_str = DATABASE_URL
@@ -54,44 +54,79 @@ def get_db_conn():
         conn.autocommit = True
         return conn
     else:
-        conn = sqlite3.connect(DB_PATH, timeout=30) # High timeout for SQLite
+        conn = sqlite3.connect(DB_PATH, timeout=30)
         conn.row_factory = sqlite3.Row
         return conn
 
 def init_db():
     conn = get_db_conn()
-    schema = """
-        CREATE TABLE IF NOT EXISTS users (
-            id TEXT PRIMARY KEY, email TEXT,
-            wizard_completed BOOLEAN DEFAULT FALSE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE TABLE IF NOT EXISTS profiles (
-            id SERIAL PRIMARY KEY, user_id TEXT UNIQUE REFERENCES users(id),
-            name TEXT, avatar TEXT, grade INTEGER, federal_state TEXT,
-            learning_type TEXT, learning_goal TEXT, meta_prompt TEXT,
-            streak INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            selected_subjects TEXT
-        );
-        CREATE TABLE IF NOT EXISTS courses (
-            id SERIAL PRIMARY KEY, user_id TEXT REFERENCES users(id),
-            subject TEXT, topic TEXT, goal_type TEXT, goal_deadline TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE TABLE IF NOT EXISTS messages (
-            id SERIAL PRIMARY KEY, course_id INTEGER REFERENCES courses(id),
-            user_id TEXT REFERENCES users(id), role TEXT, content TEXT,
-            image_base64 TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-    """
     try:
+        cur = conn.cursor()
         if DATABASE_URL:
-            cur = conn.cursor()
-            cur.execute(schema.replace("SERIAL PRIMARY KEY", "SERIAL PRIMARY KEY"))
+            # Postgres specific schema with TEXT IDs for Firebase
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id TEXT PRIMARY KEY, 
+                    email TEXT,
+                    wizard_completed BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS profiles (
+                    id SERIAL PRIMARY KEY,
+                    user_id TEXT UNIQUE REFERENCES users(id),
+                    name TEXT, avatar TEXT, grade INTEGER, federal_state TEXT,
+                    learning_type TEXT, learning_goal TEXT, meta_prompt TEXT,
+                    streak INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    selected_subjects TEXT
+                );
+                CREATE TABLE IF NOT EXISTS courses (
+                    id SERIAL PRIMARY KEY,
+                    user_id TEXT REFERENCES users(id),
+                    subject TEXT, topic TEXT, goal_type TEXT, goal_deadline TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS messages (
+                    id SERIAL PRIMARY KEY,
+                    course_id INTEGER REFERENCES courses(id),
+                    user_id TEXT REFERENCES users(id),
+                    role TEXT, content TEXT, image_base64 TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
         else:
-            conn.executescript(schema.replace("SERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT"))
-    except: pass
-    finally: conn.close()
+            # SQLite specific schema
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id TEXT PRIMARY KEY, email TEXT,
+                    wizard_completed BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS profiles (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT UNIQUE REFERENCES users(id),
+                    name TEXT, avatar TEXT, grade INTEGER, federal_state TEXT,
+                    learning_type TEXT, learning_goal TEXT, meta_prompt TEXT,
+                    streak INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    selected_subjects TEXT
+                );
+                CREATE TABLE IF NOT EXISTS courses (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT REFERENCES users(id),
+                    subject TEXT, topic TEXT, goal_type TEXT, goal_deadline TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    course_id INTEGER REFERENCES courses(id),
+                    user_id TEXT REFERENCES users(id),
+                    role TEXT, content TEXT, image_base64 TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+    except Exception as e:
+        print(f"DB Init Error: {e}")
+    finally:
+        conn.close()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -154,8 +189,8 @@ class ChatRequest(BaseModel):
 def get_profile(uid: str = Depends(get_current_user_id)):
     conn = get_db_conn()
     try:
+        cur = conn.cursor()
         if DATABASE_URL:
-            cur = conn.cursor()
             cur.execute("SELECT name, avatar, grade, federal_state, learning_type, learning_goal, selected_subjects FROM profiles WHERE user_id = %s", (uid,))
             p = cur.fetchone()
             cur.execute("SELECT wizard_completed FROM users WHERE id = %s", (uid,))
@@ -203,8 +238,9 @@ def get_all_subjects(grade: int | None = None, uid: str = Depends(get_current_us
 def get_subjects(uid: str = Depends(get_current_user_id)):
     conn = get_db_conn()
     try:
+        cur = conn.cursor()
         if DATABASE_URL:
-            cur = conn.cursor(); cur.execute("SELECT selected_subjects FROM profiles WHERE user_id = %s", (uid,)); p = cur.fetchone()
+            cur.execute("SELECT selected_subjects FROM profiles WHERE user_id = %s", (uid,)); p = cur.fetchone()
         else:
             p = conn.execute("SELECT selected_subjects FROM profiles WHERE user_id = ?", (uid,)).fetchone()
         sel = [s for s in (p["selected_subjects"] if p else "").split(",") if s]
@@ -215,8 +251,9 @@ def get_subjects(uid: str = Depends(get_current_user_id)):
 def greeting(uid: str = Depends(get_current_user_id)):
     conn = get_db_conn()
     try:
+        cur = conn.cursor()
         if DATABASE_URL:
-            cur = conn.cursor(); cur.execute("SELECT name, avatar, streak FROM profiles WHERE user_id = %s", (uid,)); p = cur.fetchone()
+            cur.execute("SELECT name, avatar, streak FROM profiles WHERE user_id = %s", (uid,)); p = cur.fetchone()
         else:
             p = conn.execute("SELECT name, avatar, streak FROM profiles WHERE user_id = ?", (uid,)).fetchone()
         if not p: return {"name": "Lerner", "avatar": "fox", "streak": 0, "greeting_message": "Hallo!"}
@@ -241,8 +278,9 @@ def create_course(body: CourseRequest, uid: str = Depends(get_current_user_id)):
 def list_courses(uid: str = Depends(get_current_user_id)):
     conn = get_db_conn()
     try:
+        cur = conn.cursor()
         if DATABASE_URL:
-            cur = conn.cursor(); cur.execute("SELECT id, subject, topic FROM courses WHERE user_id = %s ORDER BY created_at DESC", (uid,)); rows = cur.fetchall()
+            cur.execute("SELECT id, subject, topic FROM courses WHERE user_id = %s ORDER BY created_at DESC", (uid,)); rows = cur.fetchall()
         else:
             rows = conn.execute("SELECT id, subject, topic FROM courses WHERE user_id = ? ORDER BY created_at DESC", (uid,)).fetchall()
         return [dict(r) for r in rows]
@@ -252,8 +290,8 @@ def list_courses(uid: str = Depends(get_current_user_id)):
 def chat(body: ChatRequest, uid: str = Depends(get_current_user_id)):
     conn = get_db_conn()
     try:
+        cur = conn.cursor()
         if DATABASE_URL:
-            cur = conn.cursor()
             cur.execute("SELECT * FROM courses WHERE id = %s AND user_id = %s", (body.course_id, uid)); course = cur.fetchone()
             cur.execute("SELECT * FROM profiles WHERE user_id = %s", (uid,)); profile = cur.fetchone()
         else:
