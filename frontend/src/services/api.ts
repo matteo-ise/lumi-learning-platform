@@ -3,20 +3,12 @@ import { auth } from './firebase'
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 
 export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  // Wait a tiny bit for Firebase to initialize if needed
-  if (!auth.currentUser) {
-    await new Promise(resolve => setTimeout(resolve, 500))
-  }
-
+  const currentUser = auth.currentUser
   let token = localStorage.getItem('lumi_token')
   
-  if (auth.currentUser) {
-    try {
-      token = await auth.currentUser.getIdToken()
-      localStorage.setItem('lumi_token', token)
-    } catch (e) {
-      console.error("Token refresh error:", e)
-    }
+  if (currentUser) {
+    token = await currentUser.getIdToken()
+    localStorage.setItem('lumi_token', token)
   }
 
   const headers: Record<string, string> = {
@@ -32,22 +24,15 @@ export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): 
   const fullUrl = `${API_URL}${cleanEndpoint}`
 
   try {
-    const res = await fetch(fullUrl, {
-      ...options,
-      headers,
-    })
-
+    const res = await fetch(fullUrl, { ...options, headers })
     if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}))
-      throw new Error(errorData.detail || `Server meldet Fehler ${res.status}`)
+      const errData = await res.json().catch(() => ({}))
+      throw new Error(errData.detail || `Server-Fehler ${res.status}`)
     }
-
     return res.json()
   } catch (err: any) {
-    console.error(`Fetch error for ${fullUrl}:`, err)
-    if (err.message === 'Failed to fetch') {
-      throw new Error('Verbindung zum Server fehlgeschlagen. Ist das Backend online?')
-    }
-    throw err
+    console.error("Fetch Error:", fullUrl, err)
+    // Zeige die URL im Fehler an, damit wir sehen, wohin er schickt
+    throw new Error(`Verbindung fehlgeschlagen zu: ${fullUrl}. Prüfe VITE_API_URL!`)
   }
 }
