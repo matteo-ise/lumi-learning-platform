@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, date
 
 import hashlib
+import json
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,11 +21,19 @@ load_dotenv()
 # --- FIREBASE ADMIN SETUP ---
 cred_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
 if cred_json:
-    import json
-    cred_dict = json.loads(cred_json)
-    cred = credentials.Certificate(cred_dict)
-    if not firebase_admin._apps:
-        firebase_admin.initialize_app(cred)
+    try:
+        # Robust handling for accidental quotes or whitespace
+        cred_json = cred_json.strip()
+        if cred_json.startswith('"') and cred_json.endswith('"'):
+            cred_json = cred_json[1:-1].strip()
+        
+        cred_dict = json.loads(cred_json)
+        cred = credentials.Certificate(cred_dict)
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app(cred)
+    except Exception as e:
+        print(f"FATAL FIREBASE ERROR: {e}")
+        print(f"JSON Start: {cred_json[:20]}...") # Log start for debugging
 else:
     cred_path = os.path.join(os.path.dirname(__file__), "serviceAccountKey.json")
     if os.path.exists(cred_path):
@@ -51,24 +60,11 @@ def get_db():
         conn.autocommit = True
         return conn
     else:
-        # SQLite with timeout to prevent 'database is locked'
         conn = sqlite3.connect(DB_PATH, timeout=20)
         conn.row_factory = sqlite3.Row
         return conn
 
 def init_db():
-    # Attempt to detect old schema
-    if not DATABASE_URL and os.path.exists(DB_PATH):
-        try:
-            conn = get_db()
-            res = conn.execute("PRAGMA table_info(users)").fetchall()
-            for col in res:
-                if col[1] == 'id' and col[2] == 'INTEGER':
-                    print("!!! OLD SCHEMA DETECTED !!!")
-                    print("Please delete 'backend/lumi.db' to migrate to Firebase IDs.")
-            conn.close()
-        except: pass
-
     conn = get_db()
     schema = """
         CREATE TABLE IF NOT EXISTS users (
@@ -117,11 +113,8 @@ def init_db():
             cur.execute(schema.replace("AUTOINCREMENT", "").replace("INTEGER PRIMARY KEY", "SERIAL PRIMARY KEY"))
         else:
             conn.executescript(schema.replace("SERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT"))
-        conn.commit()
-    except Exception as e:
-        print(f"Init DB error: {e}")
-    finally:
-        conn.close()
+    except: pass
+    finally: conn.close()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -144,17 +137,13 @@ app.add_middleware(
 
 gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY", ""))
 
-# --- AUTH HELPER ---
-
 def get_current_user_id(authorization: str = Header(None)) -> str:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Nicht eingeloggt")
-    
     id_token = authorization.split(" ", 1)[1]
     try:
         decoded_token = auth.verify_id_token(id_token)
         uid = decoded_token['uid']
-        
         conn = get_db()
         try:
             if DATABASE_URL:
@@ -170,10 +159,8 @@ def get_current_user_id(authorization: str = Header(None)) -> str:
             conn.close()
         return uid
     except Exception as e:
-        print(f"DEBUG AUTH ERROR: {str(e)}")
         raise HTTPException(status_code=401, detail=f"Auth-Fehler: {str(e)}")
 
-# --- SUBJECT DATA ---
 SUBJECT_META = {
     "mathe": {"label": "Mathe", "emoji": "🔢", "color": "blue"},
     "deutsch": {"label": "Deutsch", "emoji": "📖", "color": "green"},
@@ -185,7 +172,6 @@ SUBJECT_META = {
     "religion_ethik": {"label": "Religion/Ethik", "emoji": "🕊️", "color": "indigo"},
 }
 
-# --- MODELS ---
 class WizardRequest(BaseModel):
     name: str
     avatar: str
@@ -206,8 +192,6 @@ class ChatRequest(BaseModel):
     message: str
     image_base64: str | None = None
 
-# --- ROUTES ---
-
 @app.get("/")
 def root(): return {"message": "LUMI API"}
 
@@ -224,16 +208,12 @@ def get_profile(user_id: str = Depends(get_current_user_id)):
         else:
             profile = conn.execute("SELECT name, avatar, grade, federal_state, learning_type, learning_goal, selected_subjects FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
             u = conn.execute("SELECT wizard_completed FROM users WHERE id = ?", (user_id,)).fetchone()
-        
-        if not profile:
-            return {"wizard_completed": bool(u["wizard_completed"]) if u else False}
-        
+        if not profile: return {"wizard_completed": bool(u["wizard_completed"]) if u else False}
         d = dict(profile)
         d["selected_subjects"] = [s for s in (d.get("selected_subjects") or "").split(",") if s]
         d["wizard_completed"] = bool(u["wizard_completed"]) if u else False
         return d
-    finally:
-        conn.close()
+    finally: conn.close()
 
 @app.post("/api/profile/wizard")
 def wizard(body: WizardRequest, user_id: str = Depends(get_current_user_id)):
@@ -257,26 +237,17 @@ def wizard(body: WizardRequest, user_id: str = Depends(get_current_user_id)):
             conn.execute("UPDATE users SET wizard_completed = TRUE WHERE id = ?", (user_id,))
             conn.commit()
         return {"ok": True}
-    finally:
-        conn.close()
+    finally: conn.close()
 
 @app.get("/api/subjects/all")
 def get_all_subjects(grade: int | None = None, user_id: str = Depends(get_current_user_id)):
-    available = []
-    for sid, m in SUBJECT_META.items():
-        available.append({"id": sid, **m})
-    return available
+    return [{"id": sid, **m} for sid, m in SUBJECT_META.items()]
 
 @app.get("/api/subjects")
 def get_subjects(user_id: str = Depends(get_current_user_id)):
     profile = get_profile(user_id)
     selected = profile.get("selected_subjects", [])
-    
-    available = []
-    for sid, m in SUBJECT_META.items():
-        if selected and sid not in selected: continue
-        available.append({"id": sid, **m})
-    return available
+    return [{"id": sid, **m} for sid, m in SUBJECT_META.items() if not selected or sid in selected]
 
 @app.get("/api/greeting")
 def greeting(user_id: str = Depends(get_current_user_id)):
@@ -297,22 +268,18 @@ def create_course(body: CourseRequest, user_id: str = Depends(get_current_user_i
             conn.commit()
             cid = cursor.lastrowid
         return {"id": cid}
-    finally:
-        conn.close()
+    finally: conn.close()
 
 @app.get("/api/courses")
 def list_courses(user_id: str = Depends(get_current_user_id)):
     conn = get_db()
     try:
         if DATABASE_URL:
-            cur = conn.cursor()
-            cur.execute("SELECT id, subject, topic FROM courses WHERE user_id = %s ORDER BY created_at DESC", (user_id,))
-            rows = cur.fetchall()
+            cur = conn.cursor(); cur.execute("SELECT id, subject, topic FROM courses WHERE user_id = %s ORDER BY created_at DESC", (user_id,)); rows = cur.fetchall()
         else:
             rows = conn.execute("SELECT id, subject, topic FROM courses WHERE user_id = ? ORDER BY created_at DESC", (user_id,)).fetchall()
         return [dict(r) for r in rows]
-    finally:
-        conn.close()
+    finally: conn.close()
 
 @app.post("/api/chat")
 def chat(body: ChatRequest, user_id: str = Depends(get_current_user_id)):
@@ -325,33 +292,26 @@ def chat(body: ChatRequest, user_id: str = Depends(get_current_user_id)):
         else:
             course = conn.execute("SELECT * FROM courses WHERE id = ? AND user_id = ?", (body.course_id, user_id)).fetchone()
             profile = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,)).fetchone()
-        
         if not course or not profile: raise HTTPException(404)
-        
         if DATABASE_URL:
             cur.execute("SELECT role, content FROM messages WHERE course_id = %s ORDER BY created_at ASC LIMIT 20", (body.course_id,)); history = cur.fetchall()
         else:
             history = conn.execute("SELECT role, content FROM messages WHERE course_id = ? ORDER BY created_at ASC LIMIT 20", (body.course_id,)).fetchall()
-
         knowledge = ""
         k_path = os.path.join(KNOWLEDGE_DIR, course["subject"], f"klasse_{profile['grade']}.md")
         if os.path.exists(k_path):
             with open(k_path, "r") as f: knowledge = f.read()
-        
         template = ""
         with open(os.path.join(PROMPT_DIR, "system_prompt.txt"), "r") as f: template = f.read()
         sys_prompt = template.format(lehrplan_kontext=knowledge, meta_prompt=profile["meta_prompt"], fach=course["subject"], thema=course["topic"], lernziel=course["topic"])
-        
         contents = [genai.types.Content(role="user" if m["role"]=="user" else "model", parts=[genai.types.Part(text=m["content"])]) for m in history]
         user_parts = [genai.types.Part(text=body.message)]
         if body.image_base64:
             img_data = body.image_base64.split(",")[1] if "," in body.image_base64 else body.image_base64
             user_parts.append(genai.types.Part.from_bytes(data=base64.b64decode(img_data), mime_type="image/jpeg"))
         contents.append(genai.types.Content(role="user", parts=user_parts))
-        
         res = gemini_client.models.generate_content(model="gemini-3-flash-preview", contents=contents, config=genai.types.GenerateContentConfig(system_instruction=sys_prompt))
         ai_res = res.text or ""
-
         if DATABASE_URL:
             cur.execute("INSERT INTO messages (course_id, user_id, role, content, image_base64) VALUES (%s, %s, 'user', %s, %s)", (body.course_id, user_id, body.message, body.image_base64))
             cur.execute("INSERT INTO messages (course_id, user_id, role, content) VALUES (%s, %s, 'assistant', %s)", (body.course_id, user_id, ai_res))
@@ -360,5 +320,4 @@ def chat(body: ChatRequest, user_id: str = Depends(get_current_user_id)):
             conn.execute("INSERT INTO messages (course_id, user_id, role, content) VALUES (?, ?, 'assistant', ?)", (body.course_id, user_id, ai_res))
             conn.commit()
         return {"response": ai_res}
-    finally:
-        conn.close()
+    finally: conn.close()
