@@ -1,14 +1,14 @@
 import { auth } from './firebase'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 
 export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  // Always try to get a fresh token from Firebase if a user is logged in
+  // Get a fresh token from Firebase
   let token = localStorage.getItem('lumi_token')
   
   if (auth.currentUser) {
     try {
-      token = await auth.currentUser.getIdToken(false) // Get fresh token, but only network if expired
+      token = await auth.currentUser.getIdToken()
       localStorage.setItem('lumi_token', token)
     } catch (e) {
       console.error("Token refresh error:", e)
@@ -24,15 +24,24 @@ export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): 
     headers['Authorization'] = `Bearer ${token}`
   }
 
-  const res = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers,
-  })
+  // Ensure endpoint starts with a slash
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+  const fullUrl = `${API_URL}${cleanEndpoint}`
 
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: 'Unbekannter Fehler' }))
-    throw new Error(error.detail || `HTTP ${res.status}`)
+  try {
+    const res = await fetch(fullUrl, {
+      ...options,
+      headers,
+    })
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: 'Server-Fehler' }))
+      throw new Error(error.detail || `HTTP ${res.status}`)
+    }
+
+    return res.json()
+  } catch (err) {
+    console.error(`Fetch error for ${fullUrl}:`, err)
+    throw err
   }
-
-  return res.json()
 }
