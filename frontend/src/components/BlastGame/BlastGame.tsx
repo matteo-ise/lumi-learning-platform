@@ -20,6 +20,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { apiFetch } from '../../services/api';
 import { MATH_TASKS } from './math_tasks';
 import type { MathTask } from './math_tasks';
 
