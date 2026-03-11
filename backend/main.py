@@ -24,6 +24,7 @@ def init_firebase():
     cred_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
     if cred_json:
         try:
+            print("INFO: Initializing Firebase via Environment Variable...")
             cred_json = cred_json.strip()
             if cred_json.startswith('"') and cred_json.endswith('"'):
                 cred_json = cred_json[1:-1].strip()
@@ -31,14 +32,19 @@ def init_firebase():
             cred = credentials.Certificate(cred_dict)
             if not firebase_admin._apps:
                 firebase_admin.initialize_app(cred)
+            print("INFO: Firebase initialized successfully.")
         except Exception as e:
-            print(f"Firebase Init Error: {e}")
+            print(f"ERROR: Firebase Init Error: {e}")
     else:
         cred_path = os.path.join(os.path.dirname(__file__), "serviceAccountKey.json")
         if os.path.exists(cred_path):
+            print("INFO: Initializing Firebase via serviceAccountKey.json...")
             cred = credentials.Certificate(cred_path)
             if not firebase_admin._apps:
                 firebase_admin.initialize_app(cred)
+            print("INFO: Firebase initialized successfully.")
+        else:
+            print("WARNING: No Firebase credentials found! Auth will fail.")
 
 init_firebase()
 
@@ -129,10 +135,13 @@ origins = [
     "http://localhost:5173", 
     "http://localhost:4173", 
     "https://lumi-ki.onrender.com", 
-    "https://uni-lumi-ki-lernplattform.onrender.com"
+    "https://uni-lumi-ki-lernplattform.onrender.com",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:4173"
 ]
 if os.getenv("CORS_ORIGINS"):
-    origins.extend(os.getenv("CORS_ORIGINS").split(","))
+    extra_origins = [o.strip().rstrip('/') for o in os.getenv("CORS_ORIGINS").split(",")]
+    origins.extend(extra_origins)
 
 app.add_middleware(
     CORSMiddleware,
@@ -141,6 +150,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    print(f"GLOBAL ERROR: {exc}")
+    traceback.print_exc()
+    return HTTPException(status_code=500, detail=str(exc))
 
 gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY", ""))
 
