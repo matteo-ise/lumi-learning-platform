@@ -309,8 +309,27 @@ export function WizardPage() {
               <p className="text-dark/60 text-sm mt-1">Welche Fächer sollen auf der Startseite erscheinen? Leer = alle.</p>
             </div>
             <div className="space-y-2 max-h-56 overflow-y-auto">
-              {availableSubjects.length === 0 && (
-                <p className="text-dark/50 text-sm py-2">Laden...</p>
+              {availableSubjects.length === 0 && !error && (
+                <div className="flex flex-col items-center py-4">
+                  <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin mb-2"></div>
+                  <p className="text-dark/50 text-sm font-bold">Fächer werden geladen...</p>
+                </div>
+              )}
+              {error && step === 5 && (
+                <div className="text-center py-4">
+                  <p className="text-red-500 text-sm font-bold mb-2">{error}</p>
+                  <button 
+                    onClick={() => {
+                      setError('');
+                      apiFetch<AvailableSubject[]>(`/api/subjects/all?grade=${data.grade}`)
+                        .then(setAvailableSubjects)
+                        .catch((e) => setError(e.message))
+                    }}
+                    className="text-primary font-bold text-xs hover:underline"
+                  >
+                    🔄 Erneut versuchen
+                  </button>
+                </div>
               )}
               {availableSubjects.map((s) => (
                 <label

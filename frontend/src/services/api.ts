@@ -3,7 +3,11 @@ import { auth } from './firebase'
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 
 export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  // Get a fresh token from Firebase
+  // Wait a tiny bit for Firebase to initialize if needed
+  if (!auth.currentUser) {
+    await new Promise(resolve => setTimeout(resolve, 500))
+  }
+
   let token = localStorage.getItem('lumi_token')
   
   if (auth.currentUser) {
@@ -24,7 +28,6 @@ export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): 
     headers['Authorization'] = `Bearer ${token}`
   }
 
-  // Ensure endpoint starts with a slash
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
   const fullUrl = `${API_URL}${cleanEndpoint}`
 
@@ -35,13 +38,16 @@ export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): 
     })
 
     if (!res.ok) {
-      const error = await res.json().catch(() => ({ detail: 'Server-Fehler' }))
-      throw new Error(error.detail || `HTTP ${res.status}`)
+      const errorData = await res.json().catch(() => ({}))
+      throw new Error(errorData.detail || `Server meldet Fehler ${res.status}`)
     }
 
     return res.json()
-  } catch (err) {
+  } catch (err: any) {
     console.error(`Fetch error for ${fullUrl}:`, err)
+    if (err.message === 'Failed to fetch') {
+      throw new Error('Verbindung zum Server fehlgeschlagen. Ist das Backend online?')
+    }
     throw err
   }
 }
