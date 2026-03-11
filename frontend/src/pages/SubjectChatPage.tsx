@@ -207,14 +207,23 @@ export function SubjectChatPage() {
         NEXT_STEP: '✅ Verstanden, weiter',
         SIMPLIFY: '❓ Nicht verstanden',
         EXAMPLE: '💡 Zeig Beispiel',
+        MORE_EXAMPLE: '🔄 Noch ein Beispiel',
+        NEW_TOPIC: '🚀 Anderes Thema',
       }
       setMessages((prev) => [
         ...prev,
         { role: 'user', content: labels[type] || type },
         { role: 'assistant', content: res.response },
       ])
-    } catch (e) { console.error(e) }
-    finally { setLoading(false) }
+    } catch (e) {
+      console.error(e)
+      setMessages((prev) => [
+        ...prev,
+        { role: 'error', content: e instanceof Error ? e.message : 'Hotkey fehlgeschlagen. Bitte erneut versuchen.' },
+      ])
+    } finally {
+      setLoading(false)
+    }
   }
 
   /** Widget: send as formatted prompt template */

@@ -165,18 +165,19 @@ export function ChatPage() {
   }
 
   const sendHotkey = async (type: string) => {
-    if (loading) return
+    if (loading || !courseId || isNaN(courseId)) return
     setLoading(true)
     try {
       const res = await apiFetch<{ response: string }>('/api/chat/hotkey', {
         method: 'POST',
         body: JSON.stringify({ course_id: courseId, hotkey_type: type }),
       })
-      // Add the hotkey as user message (simplified label)
       const labels: Record<string, string> = {
         NEXT_STEP: '✅ Verstanden, weiter',
         SIMPLIFY: '❓ Nicht verstanden',
         EXAMPLE: '💡 Zeig Beispiel',
+        MORE_EXAMPLE: '🔄 Noch ein Beispiel',
+        NEW_TOPIC: '🚀 Anderes Thema',
       }
       setMessages((prev) => [
         ...prev,
@@ -185,6 +186,10 @@ export function ChatPage() {
       ])
     } catch (e) {
       console.error(e)
+      setMessages((prev) => [
+        ...prev,
+        { role: 'error', content: e instanceof Error ? e.message : 'Hotkey fehlgeschlagen. Bitte erneut versuchen.' },
+      ])
     } finally {
       setLoading(false)
     }

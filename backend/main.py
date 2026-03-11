@@ -187,6 +187,10 @@ class CourseRequest(BaseModel):
 class ChatRequest(BaseModel):
     course_id: int; message: str; image_base64: Optional[str] = None
 
+class HotkeyRequest(BaseModel):
+    course_id: int
+    hotkey_type: str  # NEXT_STEP, SIMPLIFY, EXAMPLE, MORE_EXAMPLE, NEW_TOPIC
+
 class BlastResultRequest(BaseModel):
     score: int
     total_questions: int
@@ -384,6 +388,131 @@ async def chat(body: ChatRequest, uid: str = Depends(get_current_user)):
                 conn.commit()
             
             return {"response": ai_res}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Display labels for hotkey messages (saved in DB for history)
+HOTKEY_LABELS = {
+    "NEXT_STEP": "✅ Verstanden, weiter",
+    "SIMPLIFY": "❓ Nicht verstanden",
+    "EXAMPLE": "💡 Zeig Beispiel",
+    "MORE_EXAMPLE": "🔄 Noch ein Beispiel",
+    "NEW_TOPIC": "🚀 Anderes Thema",
+}
+
+@app.post("/api/chat/hotkey")
+async def chat_hotkey(body: HotkeyRequest, uid: str = Depends(get_current_user)):
+    """Handle hotkey clicks (Verstanden, Beispiel, etc.) with conversation context."""
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            if DATABASE_URL:
+                cur.execute("SELECT * FROM courses WHERE id = %s AND user_id = %s", (body.course_id, uid))
+                course = cur.fetchone()
+                cur.execute("SELECT * FROM profiles WHERE user_id = %s", (uid,))
+                profile = cur.fetchone()
+            else:
+                course = conn.execute("SELECT * FROM courses WHERE id = ? AND user_id = ?", (body.course_id, uid)).fetchone()
+                profile = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (uid,)).fetchone()
+
+            if not course:
+                raise HTTPException(404, detail="Course not found")
+            if not profile:
+                raise HTTPException(404, detail="Profile not found")
+
+            # Last assistant message for context
+            if DATABASE_URL:
+                cur.execute(
+                    "SELECT content FROM messages WHERE course_id = %s AND user_id = %s AND role = 'assistant' ORDER BY id DESC LIMIT 1",
+                    (body.course_id, uid),
+                )
+                row = cur.fetchone()
+            else:
+                row = conn.execute(
+                    "SELECT content FROM messages WHERE course_id = ? AND user_id = ? AND role = 'assistant' ORDER BY id DESC LIMIT 1",
+                    (body.course_id, uid),
+                ).fetchone()
+            last_content = row["content"] if row else ""
+
+            k_path = os.path.join(KNOWLEDGE_DIR, course["subject"], f"klasse_{profile['grade']}.md")
+            knowledge = ""
+            if os.path.exists(k_path):
+                with open(k_path, "r", encoding="utf-8") as f:
+                    knowledge = f.read()
+
+            prompt_path = os.path.join(PROMPT_DIR, "system_prompt.txt")
+            if not os.path.exists(prompt_path):
+                raise HTTPException(500, detail="System prompt missing")
+            with open(prompt_path, "r", encoding="utf-8") as f:
+                template = f.read()
+
+            sys_p = template.format(
+                lehrplan_kontext=knowledge,
+                meta_prompt=profile["meta_prompt"],
+                fach=course["subject"],
+                thema=course["topic"],
+                lernziel=course["topic"],
+            )
+
+            user_message = f"[HOTKEY:{body.hotkey_type}]"
+            if last_content:
+                user_message += f"\n\nDeine letzte Antwort war:\n{last_content}"
+
+            client = genai.Client(api_key=os.getenv("GEMINI_API_KEY", ""))
+            ai_res = ""
+            errors = []
+            models_to_try = [
+                "models/gemini-2.5-flash",
+                "models/gemini-2.0-flash",
+                "models/gemini-1.5-flash",
+                "models/gemini-1.5-flash-8b",
+            ]
+            for model_name in models_to_try:
+                try:
+                    res = client.models.generate_content(
+                        model=model_name,
+                        contents=[genai.types.Content(role="user", parts=[genai.types.Part(text=user_message)])],
+                        config=genai.types.GenerateContentConfig(system_instruction=sys_p),
+                    )
+                    ai_res = res.text or ""
+                    if ai_res:
+                        break
+                except Exception as gemini_err:
+                    errors.append(f"{model_name}: {str(gemini_err)[:50]}")
+                    continue
+
+            if not ai_res:
+                combined_errors = "\n".join(errors)
+                if "429" in combined_errors or "RESOURCE_EXHAUSTED" in combined_errors:
+                    ai_res = "⚠️ **LUMI macht gerade eine Pause.**\n\nMein KI-Limit für heute ist leider erreicht. Bitte versuche es in ein paar Minuten wieder! 😊"
+                else:
+                    ai_res = f"❌ **KI-Fehler:** Ich konnte keine Verbindung zu Google herstellen.\n\nDetails:\n```\n{combined_errors[:150]}...\n```"
+
+            user_label = HOTKEY_LABELS.get(body.hotkey_type, body.hotkey_type)
+            if DATABASE_URL:
+                cur.execute(
+                    "INSERT INTO messages (course_id, user_id, role, content) VALUES (%s, %s, 'user', %s)",
+                    (body.course_id, uid, user_label),
+                )
+                cur.execute(
+                    "INSERT INTO messages (course_id, user_id, role, content) VALUES (%s, %s, 'assistant', %s)",
+                    (body.course_id, uid, ai_res),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO messages (course_id, user_id, role, content) VALUES (?, ?, 'user', ?)",
+                    (body.course_id, uid, user_label),
+                )
+                conn.execute(
+                    "INSERT INTO messages (course_id, user_id, role, content) VALUES (?, ?, 'assistant', ?)",
+                    (body.course_id, uid, ai_res),
+                )
+                conn.commit()
+
+            return {"response": ai_res}
+    except HTTPException:
+        raise
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

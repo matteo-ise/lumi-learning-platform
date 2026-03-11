@@ -20,6 +20,8 @@ HOTKEYS (wenn der Schueler diese sendet):
 - [HOTKEY:NEXT_STEP] → Zeige den naechsten Schritt.
 - [HOTKEY:SIMPLIFY] → Erklaere den gleichen Schritt einfacher.
 - [HOTKEY:EXAMPLE] → Zeige ein konkretes Beispiel.
+- [HOTKEY:MORE_EXAMPLE] → Zeige ein weiteres Beispiel zum gleichen Thema.
+- [HOTKEY:NEW_TOPIC] → Wechsle zu einem anderen Thema (frage kurz nach dem neuen Thema).
 
 PAEDAGOGISCHER KONTEXT:
 {lehrplan_kontext}
