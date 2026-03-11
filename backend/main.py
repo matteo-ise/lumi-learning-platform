@@ -18,18 +18,12 @@ from firebase_admin import auth, credentials
 
 # --- INITIALIZATION ---
 load_dotenv()
-api_key = os.getenv("GEMINI_API_KEY", "")
-if api_key:
-    print(f"INFO: Loaded Gemini API Key starting with: {api_key[:6]}...")
-else:
-    print("WARNING: GEMINI_API_KEY is missing in environment!")
 
 # --- FIREBASE SETUP ---
 def init_firebase():
     cred_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
     if cred_json:
         try:
-            print("INFO: Initializing Firebase via Environment Variable...")
             cred_json = cred_json.strip()
             if cred_json.startswith('"') and cred_json.endswith('"'):
                 cred_json = cred_json[1:-1].strip()
@@ -37,19 +31,14 @@ def init_firebase():
             cred = credentials.Certificate(cred_dict)
             if not firebase_admin._apps:
                 firebase_admin.initialize_app(cred)
-            print("INFO: Firebase initialized successfully.")
         except Exception as e:
-            print(f"ERROR: Firebase Init Error: {e}")
+            print(f"Firebase Init Error: {e}")
     else:
         cred_path = os.path.join(os.path.dirname(__file__), "serviceAccountKey.json")
         if os.path.exists(cred_path):
-            print("INFO: Initializing Firebase via serviceAccountKey.json...")
             cred = credentials.Certificate(cred_path)
             if not firebase_admin._apps:
                 firebase_admin.initialize_app(cred)
-            print("INFO: Firebase initialized successfully.")
-        else:
-            print("WARNING: No Firebase credentials found! Auth will fail.")
 
 init_firebase()
 
@@ -136,10 +125,22 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="LUMI API", lifespan=lifespan)
 
 # --- MIDDLEWARE ---
+origins = [
+    "http://localhost:5173", 
+    "http://localhost:4173", 
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:4173",
+    "https://lumi-ki.onrender.com", 
+    "https://uni-lumi-ki-lernplattform.onrender.com"
+]
+if os.getenv("CORS_ORIGINS"):
+    extra_origins = [o.strip().rstrip('/') for o in os.getenv("CORS_ORIGINS").split(",")]
+    origins.extend(extra_origins)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -149,8 +150,6 @@ async def global_exception_handler(request, exc):
     print(f"GLOBAL ERROR: {exc}")
     traceback.print_exc()
     return HTTPException(status_code=500, detail=str(exc))
-
-gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY", ""))
 
 # --- AUTHENTICATION ---
 async def get_current_user(authorization: Optional[str] = Header(None)) -> str:
@@ -314,7 +313,6 @@ async def list_messages(course_id: int, uid: str = Depends(get_current_user)):
 
 @app.post("/api/chat")
 async def chat(body: ChatRequest, uid: str = Depends(get_current_user)):
-    print(f"DEBUG: Chat request received for course_id={body.course_id} from uid={uid}")
     try:
         with get_db() as conn:
             cur = conn.cursor()
@@ -344,14 +342,39 @@ async def chat(body: ChatRequest, uid: str = Depends(get_current_user)):
                 img_raw = body.image_base64.split(",")[1] if "," in body.image_base64 else body.image_base64
                 user_parts.append(genai.types.Part.from_bytes(data=base64.b64decode(img_raw), mime_type="image/jpeg"))
             
-            try:
-                res = gemini_client.models.generate_content(model="gemini-2.0-flash", contents=[genai.types.Content(role="user", parts=user_parts)], config=genai.types.GenerateContentConfig(system_instruction=sys_p))
-                ai_res = res.text or ""
-            except Exception as gemini_err:
-                if "429" in str(gemini_err) or "RESOURCE_EXHAUSTED" in str(gemini_err):
-                    return {"response": "⚠️ **LUMI macht gerade eine kurze Pause.**\n\nMein KI-Limit für heute ist leider erreicht. Bitte versuche es in ein paar Minuten (oder mit einem neuen API-Key) wieder! 😊"}
-                raise gemini_err
+            # --- GEMINI CALL WITH ROBUST FALLBACK ---
+            ai_res = ""
+            errors = []
+            models_to_try = [
+                "models/gemini-2.5-flash",
+                "models/gemini-2.0-flash",
+                "models/gemini-1.5-flash",
+                "models/gemini-1.5-flash-8b"
+            ]
+            
+            client = genai.Client(api_key=os.getenv("GEMINI_API_KEY", ""))
 
+            for model_name in models_to_try:
+                try:
+                    res = client.models.generate_content(
+                        model=model_name, 
+                        contents=[genai.types.Content(role="user", parts=user_parts)], 
+                        config=genai.types.GenerateContentConfig(system_instruction=sys_p)
+                    )
+                    ai_res = res.text or ""
+                    if ai_res: break
+                except Exception as gemini_err:
+                    errors.append(f"{model_name}: {str(gemini_err)[:50]}")
+                    continue
+            
+            if not ai_res:
+                combined_errors = "\n".join(errors)
+                if "429" in combined_errors or "RESOURCE_EXHAUSTED" in combined_errors:
+                    ai_res = "⚠️ **LUMI macht gerade eine Pause.**\n\nMein KI-Limit für heute ist leider erreicht. Bitte versuche es in ein paar Minuten (oder mit einem neuen API-Key) wieder! 😊"
+                else:
+                    ai_res = f"❌ **KI-Fehler:** Ich konnte keine Verbindung zu Google herstellen.\n\nDetails:\n```\n{combined_errors[:150]}...\n```"
+
+            # Save to database
             if DATABASE_URL:
                 cur.execute("INSERT INTO messages (course_id, user_id, role, content, image_base64) VALUES (%s, %s, 'user', %s, %s)", (body.course_id, uid, body.message, body.image_base64))
                 cur.execute("INSERT INTO messages (course_id, user_id, role, content) VALUES (%s, %s, 'assistant', %s)", (body.course_id, uid, ai_res))
