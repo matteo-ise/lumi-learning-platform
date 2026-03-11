@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { apiFetch } from '../services/api'
+import { LoadingScreen } from '../components/LoadingScreen'
 
 const AVATARS = [
   { id: 'fox',     emoji: '🦊', label: 'Fuchs',        color: 'bg-orange-100 border-orange-400' },
@@ -68,7 +69,6 @@ export function WizardPage() {
   })
   const [availableSubjects, setAvailableSubjects] = useState<AvailableSubject[]>([])
 
-  // Load existing profile data when editing settings
   useEffect(() => {
     apiFetch<WizardData | null>('/api/profile')
       .then((profile) => {
@@ -80,20 +80,19 @@ export function WizardPage() {
       .finally(() => setPrefilling(false))
   }, [])
 
-  // Fetch available subjects when entering step 5 (by grade)
   useEffect(() => {
     if (step !== 5) return
-    apiFetch<AvailableSubject[]>(`/api/subjects/all?grade=${data.grade}`)
+    apiFetch<AvailableSubject[]>(`/api/subjects/all`)
       .then(setAvailableSubjects)
-      .catch(() => setAvailableSubjects([]))
-  }, [step, data.grade])
+      .catch((e) => setError(e.message))
+  }, [step])
 
   const canNext = () => {
     if (step === 1) return data.name.trim().length > 0
     if (step === 2) return data.avatar !== ''
     if (step === 3) return data.federal_state !== ''
     if (step === 4) return data.learning_type !== '' && data.learning_goal !== ''
-    if (step === 5) return true // empty selection = show all
+    if (step === 5) return true
     return false
   }
 
@@ -107,8 +106,8 @@ export function WizardPage() {
       })
       updateWizardCompleted()
       navigate('/app')
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Fehler beim Speichern')
+    } catch (e: any) {
+      setError(e.message || 'Fehler beim Speichern')
     } finally {
       setLoading(false)
     }
@@ -117,35 +116,21 @@ export function WizardPage() {
   const isEditMode = !!user?.wizard_completed
   const stepLabels = ['Name', 'Tier', 'Klasse', 'Lerntyp', 'Fächer']
 
-  if (prefilling) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray">
-        <p className="text-xl text-dark/50">Laden...</p>
-      </div>
-    )
-  }
+  if (prefilling) return <LoadingScreen message="Profil wird geladen..." />
 
   return (
     <div className="min-h-screen bg-gray flex flex-col items-center justify-center px-4 py-10">
-      {/* Back to dashboard (only in edit mode) */}
       {isEditMode && (
         <div className="w-full max-w-xl mb-3">
-          <button
-            onClick={() => navigate('/app')}
-            className="text-dark/50 hover:text-primary font-bold text-sm flex items-center gap-1 transition-colors"
-          >
+          <button onClick={() => navigate('/app')} className="text-dark/50 hover:text-primary font-bold text-sm flex items-center gap-1 transition-colors">
             ← Zurück zur Startseite
           </button>
         </div>
       )}
       <div className="w-full max-w-xl bg-white rounded-3xl shadow-lg p-8">
-
-        {/* Progress */}
         <div className="flex items-center justify-between mb-8">
           {stepLabels.map((label, i) => {
-            const n = i + 1
-            const active = n === step
-            const done = n < step
+            const n = i + 1; const active = n === step; const done = n < step
             return (
               <div key={n} className="flex-1 flex flex-col items-center gap-1">
                 <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all ${
@@ -161,41 +146,21 @@ export function WizardPage() {
           })}
         </div>
 
-        {/* Step 1: Name */}
         {step === 1 && (
           <div className="text-center">
             <div className="text-5xl mb-4">👋</div>
             <h2 className="text-2xl font-extrabold text-dark mb-2">Wie heißt du?</h2>
-            <p className="text-dark/60 mb-6">Damit ich dich persönlich ansprechen kann!</p>
-            <input
-              type="text"
-              placeholder="Dein Vorname..."
-              value={data.name}
-              onChange={(e) => setData({ ...data, name: e.target.value })}
-              onKeyDown={(e) => e.key === 'Enter' && canNext() && setStep(2)}
-              className="w-full border-2 border-gray-200 rounded-2xl px-5 py-3 text-xl font-semibold text-center focus:outline-none focus:border-primary transition-colors"
-              autoFocus
-            />
+            <input type="text" placeholder="Dein Vorname..." value={data.name} onChange={(e) => setData({ ...data, name: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && canNext() && setStep(2)} className="w-full border-2 border-gray-200 rounded-2xl px-5 py-3 text-xl font-semibold text-center focus:outline-none focus:border-primary transition-colors" autoFocus />
           </div>
         )}
 
-        {/* Step 2: Avatar */}
         {step === 2 && (
           <div className="text-center">
             <div className="text-5xl mb-4">🐾</div>
             <h2 className="text-2xl font-extrabold text-dark mb-2">Wähle dein Tier!</h2>
-            <p className="text-dark/60 mb-6">Dein persönlicher Lern-Buddy 🌟</p>
             <div className="grid grid-cols-4 gap-3">
               {AVATARS.map((a) => (
-                <button
-                  key={a.id}
-                  onClick={() => setData({ ...data, avatar: a.id })}
-                  className={`flex flex-col items-center gap-1 p-3 rounded-2xl border-2 transition-all hover:scale-105 ${
-                    data.avatar === a.id
-                      ? `${a.color} scale-105 shadow-md`
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
+                <button key={a.id} onClick={() => setData({ ...data, avatar: a.id })} className={`flex flex-col items-center gap-1 p-3 rounded-2xl border-2 transition-all hover:scale-105 ${data.avatar === a.id ? `${a.color} scale-105 shadow-md` : 'border-gray-200 hover:border-gray-300'}`}>
                   <span className="text-3xl">{a.emoji}</span>
                   <span className="text-xs font-bold text-dark/70">{a.label}</span>
                 </button>
@@ -204,95 +169,48 @@ export function WizardPage() {
           </div>
         )}
 
-        {/* Step 3: Grade + Federal State */}
         {step === 3 && (
           <div className="text-center">
             <div className="text-5xl mb-4">🏫</div>
             <h2 className="text-2xl font-extrabold text-dark mb-2">Deine Schule</h2>
-            <p className="text-dark/60 mb-6">Damit ich die richtigen Inhalte für dich habe!</p>
-
             <div className="mb-5">
               <label className="block text-left text-sm font-bold text-dark/70 mb-2">Welche Klasse?</label>
               <div className="flex gap-2 flex-wrap justify-center">
                 {[1, 2, 3, 4].map((g) => (
-                  <button
-                    key={g}
-                    onClick={() => setData({ ...data, grade: g })}
-                    className={`w-12 h-12 rounded-xl font-extrabold text-lg border-2 transition-all hover:scale-105 ${
-                      data.grade === g
-                        ? 'bg-primary border-primary text-white shadow-md'
-                        : 'border-gray-200 text-dark/60 hover:border-primary'
-                    }`}
-                  >
-                    {g}
-                  </button>
+                  <button key={g} onClick={() => setData({ ...data, grade: g })} className={`w-12 h-12 rounded-xl font-extrabold text-lg border-2 transition-all hover:scale-105 ${data.grade === g ? 'bg-primary border-primary text-white shadow-md' : 'border-gray-200 text-dark/60 hover:border-primary'}`}>{g}</button>
                 ))}
               </div>
             </div>
-
             <div>
               <label className="block text-left text-sm font-bold text-dark/70 mb-2">Bundesland</label>
-              <select
-                value={data.federal_state}
-                onChange={(e) => setData({ ...data, federal_state: e.target.value })}
-                className="w-full border-2 border-gray-200 rounded-2xl px-4 py-3 text-lg font-semibold focus:outline-none focus:border-primary transition-colors bg-white"
-              >
+              <select value={data.federal_state} onChange={(e) => setData({ ...data, federal_state: e.target.value })} className="w-full border-2 border-gray-200 rounded-2xl px-4 py-3 text-lg font-semibold focus:outline-none focus:border-primary transition-colors bg-white">
                 <option value="">Bitte wählen...</option>
-                {FEDERAL_STATES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
+                {FEDERAL_STATES.map((s) => (<option key={s} value={s}>{s}</option>))}
               </select>
             </div>
           </div>
         )}
 
-        {/* Step 4: Learning type + goal */}
         {step === 4 && (
           <div>
-            <div className="text-center mb-5">
-              <div className="text-5xl mb-2">🎯</div>
-              <h2 className="text-2xl font-extrabold text-dark">Wie lernst du?</h2>
-              <p className="text-dark/60 text-sm mt-1">Ich passe mich an deinen Stil an!</p>
-            </div>
-
+            <div className="text-center mb-5"><div className="text-5xl mb-2">🎯</div><h2 className="text-2xl font-extrabold text-dark">Wie lernst du?</h2></div>
             <div className="mb-5">
               <label className="block text-sm font-bold text-dark/70 mb-2">Lerntyp</label>
               <div className="grid grid-cols-2 gap-2">
                 {LEARNING_TYPES.map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => setData({ ...data, learning_type: t.id })}
-                    className={`flex items-center gap-2 p-3 rounded-2xl border-2 text-left transition-all hover:scale-[1.02] ${
-                      data.learning_type === t.id
-                        ? 'bg-primary/10 border-primary shadow-sm'
-                        : 'border-gray-200 hover:border-primary/50'
-                    }`}
-                  >
+                  <button key={t.id} onClick={() => setData({ ...data, learning_type: t.id })} className={`flex items-center gap-2 p-3 rounded-2xl border-2 text-left transition-all hover:scale-[1.02] ${data.learning_type === t.id ? 'bg-primary/10 border-primary shadow-sm' : 'border-gray-200 hover:border-primary/50'}`}>
                     <span className="text-xl">{t.emoji}</span>
-                    <div>
-                      <p className="font-bold text-dark text-sm">{t.label}</p>
-                      <p className="text-dark/50 text-xs">{t.desc}</p>
-                    </div>
+                    <div><p className="font-bold text-dark text-sm">{t.label}</p><p className="text-dark/50 text-xs">{t.desc}</p></div>
                   </button>
                 ))}
               </div>
             </div>
-
             <div>
               <label className="block text-sm font-bold text-dark/70 mb-2">Lernziel</label>
               <div className="flex gap-2">
                 {LEARNING_GOALS.map((g) => (
-                  <button
-                    key={g.id}
-                    onClick={() => setData({ ...data, learning_goal: g.id })}
-                    className={`flex-1 flex flex-col items-center gap-1 p-3 rounded-2xl border-2 transition-all hover:scale-[1.02] ${
-                      data.learning_goal === g.id
-                        ? 'bg-mint/10 border-mint shadow-sm'
-                        : 'border-gray-200 hover:border-mint/50'
-                    }`}
-                  >
-                    <span className="text-2xl">{g.emoji}</span>
-                    <span className="text-xs font-bold text-dark/70 text-center">{g.label}</span>
+                  <button key={g.id} onClick={() => setData({ ...data, learning_goal: g.id })} className={`flex-1 flex flex-col items-center gap-1 p-3 rounded-2xl border-2 transition-all hover:scale-[1.02] ${data.learning_goal === g.id ? 'bg-mint/10 border-mint shadow-sm' : 'border-gray-200 hover:border-mint/50'}`}>
+                    <span className="text-2xl">{g.emoji}</span><span className="text-xs font-bold text-dark/70 text-center">{g.label}</span>
                   </button>
                 ))}
               </div>
@@ -300,14 +218,9 @@ export function WizardPage() {
           </div>
         )}
 
-        {/* Step 5: Subject selection */}
         {step === 5 && (
           <div>
-            <div className="text-center mb-5">
-              <div className="text-5xl mb-2">📚</div>
-              <h2 className="text-2xl font-extrabold text-dark">Deine Fächer</h2>
-              <p className="text-dark/60 text-sm mt-1">Welche Fächer sollen auf der Startseite erscheinen? Leer = alle.</p>
-            </div>
+            <div className="text-center mb-5"><div className="text-5xl mb-2">📚</div><h2 className="text-2xl font-extrabold text-dark">Deine Fächer</h2></div>
             <div className="space-y-2 max-h-56 overflow-y-auto">
               {availableSubjects.length === 0 && !error && (
                 <div className="flex flex-col items-center py-4">
@@ -315,78 +228,29 @@ export function WizardPage() {
                   <p className="text-dark/50 text-sm font-bold">Fächer werden geladen...</p>
                 </div>
               )}
-              {error && step === 5 && (
+              {error && (
                 <div className="text-center py-4">
                   <p className="text-red-500 text-sm font-bold mb-2">{error}</p>
-                  <button 
-                    onClick={() => {
-                      setError('');
-                      apiFetch<AvailableSubject[]>(`/api/subjects/all?grade=${data.grade}`)
-                        .then(setAvailableSubjects)
-                        .catch((e) => setError(e.message))
-                    }}
-                    className="text-primary font-bold text-xs hover:underline"
-                  >
-                    🔄 Erneut versuchen
-                  </button>
+                  <button onClick={() => { setError(''); apiFetch<AvailableSubject[]>('/api/subjects/all').then(setAvailableSubjects).catch((e) => setError(e.message)) }} className="text-primary font-bold text-xs hover:underline">🔄 Erneut versuchen</button>
                 </div>
               )}
               {availableSubjects.map((s) => (
-                <label
-                  key={s.id}
-                  className="flex items-center gap-3 p-3 rounded-xl border-2 border-gray-200 hover:border-primary/50 cursor-pointer transition-colors"
-                >
-                  <input
-                    type="checkbox"
-                    checked={data.selected_subjects.includes(s.id)}
-                    onChange={() => {
-                      const next = data.selected_subjects.includes(s.id)
-                        ? data.selected_subjects.filter((id) => id !== s.id)
-                        : [...data.selected_subjects, s.id]
-                      setData({ ...data, selected_subjects: next })
-                    }}
-                    className="w-5 h-5 rounded border-2 border-gray-300 text-primary focus:ring-primary"
-                  />
-                  <span className="text-2xl">{s.emoji}</span>
-                  <span className="font-bold text-dark">{s.label}</span>
+                <label key={s.id} className="flex items-center gap-3 p-3 rounded-xl border-2 border-gray-200 hover:border-primary/50 cursor-pointer transition-colors">
+                  <input type="checkbox" checked={data.selected_subjects.includes(s.id)} onChange={() => { const next = data.selected_subjects.includes(s.id) ? data.selected_subjects.filter((id) => id !== s.id) : [...data.selected_subjects, s.id]; setData({ ...data, selected_subjects: next }) }} className="w-5 h-5 rounded border-2 border-gray-300 text-primary focus:ring-primary" />
+                  <span className="text-2xl">{s.emoji}</span><span className="font-bold text-dark">{s.label}</span>
                 </label>
               ))}
             </div>
           </div>
         )}
 
-        {/* Error */}
-        {error && (
-          <p className="mt-4 text-red-500 text-sm text-center font-semibold">{error}</p>
-        )}
+        {error && step !== 5 && <p className="mt-4 text-red-500 text-sm text-center font-semibold">{error}</p>}
 
-        {/* Navigation buttons */}
         <div className="flex gap-3 mt-8">
-          {step > 1 && (
-            <button
-              onClick={() => setStep(step - 1)}
-              className="flex-1 py-3 rounded-2xl border-2 border-gray-200 text-dark/70 font-bold text-lg hover:border-gray-300 transition-colors"
-            >
-              ← Zurück
-            </button>
-          )}
-          {step < 5 ? (
-            <button
-              onClick={() => setStep(step + 1)}
-              disabled={!canNext()}
-              className="flex-1 py-3 rounded-2xl bg-primary text-white font-bold text-lg hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-            >
-              Weiter →
-            </button>
-          ) : (
-            <button
-              onClick={handleSubmit}
-              disabled={!canNext() || loading}
-              className="flex-1 py-3 rounded-2xl bg-mint text-white font-bold text-lg hover:bg-mint/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-            >
-              {loading ? 'Speichern...' : 'Los geht\'s! 🚀'}
-            </button>
-          )}
+          {step > 1 && <button onClick={() => setStep(step - 1)} className="flex-1 py-3 rounded-2xl border-2 border-gray-200 text-dark/70 font-bold text-lg hover:border-gray-300 transition-colors">← Zurück</button>}
+          {step < 5 ? <button onClick={() => setStep(step + 1)} disabled={!canNext()} className="flex-1 py-3 rounded-2xl bg-primary text-white font-bold text-lg hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all">Weiter →</button> :
+            <button onClick={handleSubmit} disabled={!canNext() || loading} className="flex-1 py-3 rounded-2xl bg-mint text-white font-bold text-lg hover:bg-mint/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all">{loading ? 'Speichern...' : 'Los geht\'s! 🚀'}</button>
+          }
         </div>
       </div>
     </div>

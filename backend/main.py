@@ -62,71 +62,36 @@ def init_db():
     conn = get_db_conn()
     try:
         cur = conn.cursor()
+        schema = """
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY, email TEXT,
+                wizard_completed BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS profiles (
+                id SERIAL PRIMARY KEY, user_id TEXT UNIQUE REFERENCES users(id),
+                name TEXT, avatar TEXT, grade INTEGER, federal_state TEXT,
+                learning_type TEXT, learning_goal TEXT, meta_prompt TEXT,
+                streak INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                selected_subjects TEXT
+            );
+            CREATE TABLE IF NOT EXISTS courses (
+                id SERIAL PRIMARY KEY, user_id TEXT REFERENCES users(id),
+                subject TEXT, topic TEXT, goal_type TEXT, goal_deadline TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS messages (
+                id SERIAL PRIMARY KEY, course_id INTEGER REFERENCES courses(id),
+                user_id TEXT REFERENCES users(id), role TEXT, content TEXT,
+                image_base64 TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """
         if DATABASE_URL:
-            # Postgres specific schema with TEXT IDs for Firebase
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id TEXT PRIMARY KEY, 
-                    email TEXT,
-                    wizard_completed BOOLEAN DEFAULT FALSE,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-                CREATE TABLE IF NOT EXISTS profiles (
-                    id SERIAL PRIMARY KEY,
-                    user_id TEXT UNIQUE REFERENCES users(id),
-                    name TEXT, avatar TEXT, grade INTEGER, federal_state TEXT,
-                    learning_type TEXT, learning_goal TEXT, meta_prompt TEXT,
-                    streak INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    selected_subjects TEXT
-                );
-                CREATE TABLE IF NOT EXISTS courses (
-                    id SERIAL PRIMARY KEY,
-                    user_id TEXT REFERENCES users(id),
-                    subject TEXT, topic TEXT, goal_type TEXT, goal_deadline TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-                CREATE TABLE IF NOT EXISTS messages (
-                    id SERIAL PRIMARY KEY,
-                    course_id INTEGER REFERENCES courses(id),
-                    user_id TEXT REFERENCES users(id),
-                    role TEXT, content TEXT, image_base64 TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            """)
+            cur.execute(schema)
         else:
-            # SQLite specific schema
-            conn.executescript("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id TEXT PRIMARY KEY, email TEXT,
-                    wizard_completed BOOLEAN DEFAULT FALSE,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-                CREATE TABLE IF NOT EXISTS profiles (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id TEXT UNIQUE REFERENCES users(id),
-                    name TEXT, avatar TEXT, grade INTEGER, federal_state TEXT,
-                    learning_type TEXT, learning_goal TEXT, meta_prompt TEXT,
-                    streak INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    selected_subjects TEXT
-                );
-                CREATE TABLE IF NOT EXISTS courses (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id TEXT REFERENCES users(id),
-                    subject TEXT, topic TEXT, goal_type TEXT, goal_deadline TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-                CREATE TABLE IF NOT EXISTS messages (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    course_id INTEGER REFERENCES courses(id),
-                    user_id TEXT REFERENCES users(id),
-                    role TEXT, content TEXT, image_base64 TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            """)
-    except Exception as e:
-        print(f"DB Init Error: {e}")
-    finally:
-        conn.close()
+            conn.executescript(schema.replace("SERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT"))
+    except: pass
+    finally: conn.close()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -135,8 +100,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="LUMI API", lifespan=lifespan)
 
-origins = ["http://localhost:5173", "http://localhost:4173"]
-if os.getenv("CORS_ORIGINS"): origins.extend(os.getenv("CORS_ORIGINS").split(","))
+origins = ["http://localhost:5173", "http://localhost:4173", "https://lumi-ki.onrender.com"]
+if os.getenv("CORS_ORIGINS"): 
+    origins.extend(os.getenv("CORS_ORIGINS").split(","))
 
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
@@ -179,11 +145,17 @@ class WizardRequest(BaseModel):
     name: str; avatar: str; grade: int; federal_state: str;
     learning_type: str; learning_goal: str; selected_subjects: list[str] = []
 
+class ProfileSubjectsRequest(BaseModel):
+    selected_subjects: list[str] = []
+
 class CourseRequest(BaseModel):
     subject: str; topic: str; goal_type: str = ""; goal_deadline: str = ""
 
 class ChatRequest(BaseModel):
     course_id: int; message: str; image_base64: str | None = None
+
+@app.get("/")
+def root(): return {"message": "LUMI API"}
 
 @app.get("/api/profile")
 def get_profile(uid: str = Depends(get_current_user_id)):
@@ -198,7 +170,6 @@ def get_profile(uid: str = Depends(get_current_user_id)):
         else:
             p = conn.execute("SELECT name, avatar, grade, federal_state, learning_type, learning_goal, selected_subjects FROM profiles WHERE user_id = ?", (uid,)).fetchone()
             u = conn.execute("SELECT wizard_completed FROM users WHERE id = ?", (uid,)).fetchone()
-        
         if not p: return {"wizard_completed": bool(u["wizard_completed"]) if u else False}
         res = dict(p)
         res["selected_subjects"] = [s for s in (res.get("selected_subjects") or "").split(",") if s]
@@ -226,6 +197,20 @@ def wizard(body: WizardRequest, uid: str = Depends(get_current_user_id)):
             else:
                 conn.execute("INSERT INTO profiles (user_id, name, avatar, grade, federal_state, learning_type, learning_goal, meta_prompt, selected_subjects) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (uid, body.name, body.avatar, body.grade, body.federal_state, body.learning_type, body.learning_goal, meta, sel))
             conn.execute("UPDATE users SET wizard_completed = TRUE WHERE id = ?", (uid,))
+            conn.commit()
+        return {"ok": True}
+    finally: conn.close()
+
+@app.put("/api/profile/subjects")
+def update_subjects(body: ProfileSubjectsRequest, uid: str = Depends(get_current_user_id)):
+    sel = ",".join(body.selected_subjects)
+    conn = get_db_conn()
+    try:
+        cur = conn.cursor()
+        if DATABASE_URL:
+            cur.execute("UPDATE profiles SET selected_subjects = %s WHERE user_id = %s", (sel, uid))
+        else:
+            conn.execute("UPDATE profiles SET selected_subjects = ? WHERE user_id = ?", (sel, uid))
             conn.commit()
         return {"ok": True}
     finally: conn.close()
