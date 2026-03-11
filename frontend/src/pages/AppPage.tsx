@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { apiFetch } from '../services/api'
-import { SubjectSelectionModal } from '../components/SubjectSelectionModal'
+import { LoadingScreen } from '../components/LoadingScreen'
 
 interface Greeting {
   name: string
@@ -39,15 +39,6 @@ export function AppPage() {
   const navigate = useNavigate()
   const [greeting, setGreeting] = useState<Greeting | null>(null)
   const [subjects, setSubjects] = useState<Subject[]>([])
-  const [subjectModalOpen, setSubjectModalOpen] = useState(false)
-  const [subjectModalInitial, setSubjectModalInitial] = useState<string[]>([])
-
-  const openSubjectModal = () => {
-    apiFetch<{ selected_subjects?: string[] } | null>('/api/profile')
-      .then((p) => setSubjectModalInitial(p?.selected_subjects ?? []))
-      .catch(() => setSubjectModalInitial([]))
-    setSubjectModalOpen(true)
-  }
 
   useEffect(() => {
     if (loading) return
@@ -59,13 +50,7 @@ export function AppPage() {
     apiFetch<Subject[]>('/api/subjects').then(setSubjects).catch(console.error)
   }, [user, loading, navigate])
 
-  if (!greeting) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-xl">Laden...</p>
-      </div>
-    )
-  }
+  if (!greeting) return <LoadingScreen />
 
   const avatarEmoji = avatarEmojis[greeting.avatar] || '🦊'
 
@@ -79,7 +64,7 @@ export function AppPage() {
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={openSubjectModal}
+            onClick={() => navigate('/app/wizard?step=5')}
             title="Fächer anpassen"
             className="flex items-center justify-center w-9 h-9 rounded-xl bg-primary/10 text-primary font-bold text-xl hover:bg-primary/20 transition-all"
           >
@@ -147,17 +132,6 @@ export function AppPage() {
           })}
         </div>
       </div>
-
-      {subjectModalOpen && (
-        <SubjectSelectionModal
-          initialSelected={subjectModalInitial}
-          onSave={() => {
-            apiFetch<Subject[]>('/api/subjects').then(setSubjects).catch(console.error)
-          }}
-          onClose={() => setSubjectModalOpen(false)}
-          standalone
-        />
-      )}
     </div>
   )
 }

@@ -53,7 +53,12 @@ interface AvailableSubject {
 export function WizardPage() {
   const navigate = useNavigate()
   const { user, updateWizardCompleted } = useAuth()
-  const [step, setStep] = useState(1)
+  
+  // Read initial step from URL (e.g., ?step=5)
+  const queryParams = new URLSearchParams(window.location.search)
+  const initialStep = parseInt(queryParams.get('step') || '1', 10)
+  
+  const [step, setStep] = useState(initialStep)
   const [loading, setLoading] = useState(false)
   const [prefilling, setPrefilling] = useState(true)
   const [error, setError] = useState('')

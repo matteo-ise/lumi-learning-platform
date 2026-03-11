@@ -1,51 +1,44 @@
-# LUMI – KI-Lernplattform
+# LUMI – KI-Lernplattform für Grundschüler 🐬
 
-KI-gestuetzte Nachhilfeplattform fuer Schueler (Klassen 1–4) mit personalisiertem Tutoring, Bilderkennung und Gamification.
+LUMI ist eine innovative, KI-gestützte Nachhilfeplattform, die speziell für Schüler der Klassen 1–4 entwickelt wurde. Das System kombiniert modernste KI-Technologie (Gemini 2.0) mit pädagogischen Konzepten wie personalisierten Lernpfaden und Gamification.
 
-## Tech-Stack
+## 🚀 Features
+- **Intelligentes Tutoring:** Adaptive Lernbegleitung durch Google Gemini 2.0 Flash.
+- **Multimodale Interaktion:** Unterstützung für Bilderkennung (z.B. Fotos von Hausaufgaben) und Spracheingabe.
+- **Personalisierung:** Individueller Wizard zur Erfassung von Lernstand, Bundesland und Lerntyp.
+- **Gamification:** "LUMI Blast" Mathe-Spiel mit klassenstufenspezifischen Aufgaben.
+- **Sicherheit:** Firebase-basierter Google Sign-In und sichere Cloud-Datenhaltung.
 
-| Was              | Technologie                |
-| ---------------- | -------------------------- |
-| Frontend         | React (Vite) + TailwindCSS |
-| Backend          | FastAPI (Python)            |
-| LLM + Vision     | Google Gemini 2.5 Flash     |
-| Datenbank        | SQLite                      |
+## 🛠 Tech-Stack
+### Frontend
+- **Framework:** React 18 mit TypeScript (Vite)
+- **Styling:** TailwindCSS (modernes, kindgerechtes Design)
+- **Auth:** Firebase Authentication (Google OAuth 2.0)
+- **State:** React Hooks & Custom Auth Provider
 
-## Quickstart
+### Backend
+- **Framework:** FastAPI (Python 3.12)
+- **KI-Integration:** Google GenAI SDK (Gemini 2.0 Flash)
+- **Datenbank:** Hybrid-Setup (SQLite für lokale Entwicklung, PostgreSQL/Neon für Produktion)
+- **Sicherheit:** Firebase Admin SDK zur Token-Verifizierung
 
-```bash
-# Backend starten
-cd backend
-pip install -r requirements.txt
-uvicorn main:app --reload
+## 🏗 Architektur
+Das System folgt einer modernen Client-Server-Architektur:
+1. **Frontend:** Statisch gehostet, kommuniziert via REST-API mit dem Backend.
+2. **Backend:** Stateless API, verifiziert Firebase-Tokens und orchestriert KI-Anfragen.
+3. **Persistenz:** Relationale Datenbank zur Speicherung von Profilen, Kursen und Chat-Historien.
 
-# Frontend starten (neues Terminal)
-cd frontend
-npm install
-npm run dev
-```
+## ⚙️ Setup & Deployment
+### Lokal
+1. Backend: `pip install -r requirements.txt` -> `uvicorn main:app --reload`
+2. Frontend: `npm install` -> `npm run dev`
 
-| Service    | URL                       |
-| ---------- | ------------------------- |
-| Frontend   | http://localhost:5173      |
-| Backend    | http://localhost:8000      |
-| API-Docs   | http://localhost:8000/docs |
+### Produktion (Render + Neon)
+- **Frontend:** Erfordert `VITE_API_URL` als Umgebungsvariable beim Build.
+- **Backend:** Erfordert `DATABASE_URL` (Postgres), `GEMINI_API_KEY` und `FIREBASE_SERVICE_ACCOUNT_JSON`.
 
-## Dokumentation
+## 🎓 Akademischer Kontext
+Dieses Projekt wurde im Rahmen des Studiums entwickelt. Besonderer Fokus lag auf der **Clean Code Architektur**, der **Sicherheit sensibler Nutzerdaten** (DSGVO-konforme Auth-Logik) und der **Skalierbarkeit** durch Cloud-native Dienste.
 
-- [Projekt 1: Homepage & Landing Page](docs/01-homepage-landing.md)
-- [Projekt 2: KI-Chat mit Bilderkennung](docs/02-ki-chat.md)
-- [Umsetzungsplan: Sprint-by-Sprint](docs/03-umsetzung.md)
-
-## Repo-Struktur
-
-```
-uni-lumi-ki-lernplattform/
-├── docs/                  Technische Konzeptdokumente
-├── frontend/              React SPA
-├── backend/               FastAPI + Gemini
-│   ├── main.py            Gesamtes Backend in einer Datei
-│   ├── knowledge/         Lehrplan-Kontext (.md)
-│   └── requirements.txt
-└── README.md
-```
+---
+Developed with ❤️ 

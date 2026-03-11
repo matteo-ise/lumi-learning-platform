@@ -46,14 +46,21 @@ export function BlastGame({ grade }: BlastGameProps) {
   };
 
   const handleAnswer = (selected: number) => {
+    let nextScore = score;
     if (selected === tasks[currentIndex].answer) {
-      setScore((prev) => prev + 1);
+      nextScore = score + 1;
+      setScore(nextScore);
     }
 
     if (currentIndex + 1 < tasks.length) {
       setCurrentIndex((prev) => prev + 1);
     } else {
       setGameState('end');
+      // Save score to backend
+      apiFetch('/api/blast/results', {
+        method: 'POST',
+        body: JSON.stringify({ score: nextScore, total_questions: tasks.length }),
+      }).catch(console.error);
     }
   };
 
