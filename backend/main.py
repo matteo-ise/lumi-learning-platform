@@ -18,6 +18,11 @@ from firebase_admin import auth, credentials
 
 # --- INITIALIZATION ---
 load_dotenv()
+api_key = os.getenv("GEMINI_API_KEY", "")
+if api_key:
+    print(f"INFO: Loaded Gemini API Key starting with: {api_key[:6]}...")
+else:
+    print("WARNING: GEMINI_API_KEY is missing in environment!")
 
 # --- FIREBASE SETUP ---
 def init_firebase():
@@ -131,22 +136,10 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="LUMI API", lifespan=lifespan)
 
 # --- MIDDLEWARE ---
-origins = [
-    "http://localhost:5173", 
-    "http://localhost:4173", 
-    "https://lumi-ki.onrender.com", 
-    "https://uni-lumi-ki-lernplattform.onrender.com",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:4173"
-]
-if os.getenv("CORS_ORIGINS"):
-    extra_origins = [o.strip().rstrip('/') for o in os.getenv("CORS_ORIGINS").split(",")]
-    origins.extend(extra_origins)
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -308,32 +301,66 @@ async def list_courses(uid: str = Depends(get_current_user)):
             rows = conn.execute("SELECT id, subject, topic FROM courses WHERE user_id = ? ORDER BY created_at DESC", (uid,)).fetchall()
         return [dict(r) for r in rows]
 
+@app.get("/api/courses/{course_id}/messages")
+async def list_messages(course_id: int, uid: str = Depends(get_current_user)):
+    with get_db() as conn:
+        if DATABASE_URL:
+            cur = conn.cursor()
+            cur.execute("SELECT role, content, image_base64 FROM messages WHERE course_id = %s AND user_id = %s ORDER BY created_at ASC", (course_id, uid))
+            rows = cur.fetchall()
+        else:
+            rows = conn.execute("SELECT role, content, image_base64 FROM messages WHERE course_id = ? AND user_id = ? ORDER BY created_at ASC", (course_id, uid)).fetchall()
+        return [dict(r) for r in rows]
+
 @app.post("/api/chat")
 async def chat(body: ChatRequest, uid: str = Depends(get_current_user)):
-    with get_db() as conn:
-        cur = conn.cursor()
-        if DATABASE_URL:
-            cur.execute("SELECT * FROM courses WHERE id = %s AND user_id = %s", (body.course_id, uid)); course = cur.fetchone()
-            cur.execute("SELECT * FROM profiles WHERE user_id = %s", (uid,)); profile = cur.fetchone()
-        else:
-            course = conn.execute("SELECT * FROM courses WHERE id = ? AND user_id = ?", (body.course_id, uid)).fetchone()
-            profile = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (uid,)).fetchone()
-        if not course or not profile: raise HTTPException(404)
-        k_path = os.path.join(KNOWLEDGE_DIR, course["subject"], f"klasse_{profile['grade']}.md")
-        knowledge = open(k_path, "r", encoding="utf-8").read() if os.path.exists(k_path) else ""
-        with open(os.path.join(PROMPT_DIR, "system_prompt.txt"), "r", encoding="utf-8") as f: template = f.read()
-        sys_p = template.format(lehrplan_kontext=knowledge, meta_prompt=profile["meta_prompt"], fach=course["subject"], thema=course["topic"], lernziel=course["topic"])
-        user_parts = [genai.types.Part(text=body.message)]
-        if body.image_base64:
-            img_raw = body.image_base64.split(",")[1] if "," in body.image_base64 else body.image_base64
-            user_parts.append(genai.types.Part.from_bytes(data=base64.b64decode(img_raw), mime_type="image/jpeg"))
-        res = gemini_client.models.generate_content(model="gemini-2.0-flash", contents=[genai.types.Content(role="user", parts=user_parts)], config=genai.types.GenerateContentConfig(system_instruction=sys_p))
-        ai_res = res.text or ""
-        if DATABASE_URL:
-            cur.execute("INSERT INTO messages (course_id, user_id, role, content, image_base64) VALUES (%s, %s, 'user', %s, %s)", (body.course_id, uid, body.message, body.image_base64))
-            cur.execute("INSERT INTO messages (course_id, user_id, role, content) VALUES (%s, %s, 'assistant', %s)", (body.course_id, uid, ai_res))
-        else:
-            conn.execute("INSERT INTO messages (course_id, user_id, role, content, image_base64) VALUES (?, ?, 'user', ?, ?)", (body.course_id, uid, body.message, body.image_base64))
-            conn.execute("INSERT INTO messages (course_id, user_id, role, content) VALUES (?, ?, 'assistant', ?)", (body.course_id, uid, ai_res))
-            conn.commit()
-    return {"response": ai_res}
+    print(f"DEBUG: Chat request received for course_id={body.course_id} from uid={uid}")
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            if DATABASE_URL:
+                cur.execute("SELECT * FROM courses WHERE id = %s AND user_id = %s", (body.course_id, uid)); course = cur.fetchone()
+                cur.execute("SELECT * FROM profiles WHERE user_id = %s", (uid,)); profile = cur.fetchone()
+            else:
+                course = conn.execute("SELECT * FROM courses WHERE id = ? AND user_id = ?", (body.course_id, uid)).fetchone()
+                profile = conn.execute("SELECT * FROM profiles WHERE user_id = ?", (uid,)).fetchone()
+            
+            if not course: raise HTTPException(404, detail="Course not found")
+            if not profile: raise HTTPException(404, detail="Profile not found")
+
+            k_path = os.path.join(KNOWLEDGE_DIR, course["subject"], f"klasse_{profile['grade']}.md")
+            knowledge = ""
+            if os.path.exists(k_path):
+                with open(k_path, "r", encoding="utf-8") as f: knowledge = f.read()
+
+            prompt_path = os.path.join(PROMPT_DIR, "system_prompt.txt")
+            if not os.path.exists(prompt_path): raise HTTPException(500, detail="System prompt missing")
+            with open(prompt_path, "r", encoding="utf-8") as f: template = f.read()
+            
+            sys_p = template.format(lehrplan_kontext=knowledge, meta_prompt=profile["meta_prompt"], fach=course["subject"], thema=course["topic"], lernziel=course["topic"])
+
+            user_parts = [genai.types.Part(text=body.message)]
+            if body.image_base64:
+                img_raw = body.image_base64.split(",")[1] if "," in body.image_base64 else body.image_base64
+                user_parts.append(genai.types.Part.from_bytes(data=base64.b64decode(img_raw), mime_type="image/jpeg"))
+            
+            try:
+                res = gemini_client.models.generate_content(model="gemini-2.0-flash", contents=[genai.types.Content(role="user", parts=user_parts)], config=genai.types.GenerateContentConfig(system_instruction=sys_p))
+                ai_res = res.text or ""
+            except Exception as gemini_err:
+                if "429" in str(gemini_err) or "RESOURCE_EXHAUSTED" in str(gemini_err):
+                    return {"response": "⚠️ **LUMI macht gerade eine kurze Pause.**\n\nMein KI-Limit für heute ist leider erreicht. Bitte versuche es in ein paar Minuten (oder mit einem neuen API-Key) wieder! 😊"}
+                raise gemini_err
+
+            if DATABASE_URL:
+                cur.execute("INSERT INTO messages (course_id, user_id, role, content, image_base64) VALUES (%s, %s, 'user', %s, %s)", (body.course_id, uid, body.message, body.image_base64))
+                cur.execute("INSERT INTO messages (course_id, user_id, role, content) VALUES (%s, %s, 'assistant', %s)", (body.course_id, uid, ai_res))
+            else:
+                conn.execute("INSERT INTO messages (course_id, user_id, role, content, image_base64) VALUES (?, ?, 'user', ?, ?)", (body.course_id, uid, body.message, body.image_base64))
+                conn.execute("INSERT INTO messages (course_id, user_id, role, content) VALUES (?, ?, 'assistant', ?)", (body.course_id, uid, ai_res))
+                conn.commit()
+            
+            return {"response": ai_res}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
