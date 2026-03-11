@@ -6,3 +6,4 @@ __pycache__/
 .env
 lumi.db
 .DS_Store
+serviceAccountKey.json
