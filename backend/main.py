@@ -125,7 +125,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="LUMI API", lifespan=lifespan)
 
 # --- MIDDLEWARE ---
-origins = ["http://localhost:5173", "http://localhost:4173", "https://lumi-ki.onrender.com"]
+origins = [
+    "http://localhost:5173", 
+    "http://localhost:4173", 
+    "https://lumi-ki.onrender.com", 
+    "https://uni-lumi-ki-lernplattform.onrender.com"
+]
 if os.getenv("CORS_ORIGINS"):
     origins.extend(os.getenv("CORS_ORIGINS").split(","))
 
