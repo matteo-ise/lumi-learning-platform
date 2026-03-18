@@ -29,6 +29,17 @@ export function ChatPage() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [avatar, setAvatar] = useState('fox')
+
+  const [mode, setMode] = useState<'chat' | 'exam'>('chat')
+  const [examState, setExamState] = useState<'idle' | 'running' | 'finished'>('idle')
+  const [answers, setAnswers] = useState<string[]>(['', '', '', ''])
+  const [score, setScore] = useState<number | null>(null)
+  const examQuestions = [
+  { frage: "5 + 3 = ?", lösung: "8" },
+  { frage: "12 - 7 = ?", lösung: "5" },
+  { frage: "4 + 6 = ?", lösung: "10" },
+  { frage: "9 - 2 = ?", lösung: "7" }
+]
   
   // Sprint 5: State for image, recording, and TTS
   const [imagePreview, setImagePreview] = useState<string | null>(null)
@@ -238,8 +249,18 @@ export function ChatPage() {
               <div className="text-5xl mb-3">{avatarEmoji}</div>
               <p className="text-lg font-semibold">Schreib mir deine erste Frage!</p>
               <p className="text-sm mt-1">Ich helfe dir Schritt für Schritt.</p>
-            </div>
-          )}
+  
+            <button
+              onClick={() => {
+                setMode('exam')
+                setExamState('running')
+              }}
+              className="mt-6 bg-primary text-white px-6 py-3 rounded-2xl font-bold hover:bg-primary/90"
+            >
+      📝 Probeklausur starten
+    </button>
+  </div>
+)}
 
           {/* Mobile Timeline (Top) */}
           {hasMessages && currentStep > 0 && (
@@ -257,7 +278,75 @@ export function ChatPage() {
             const isSpeaking = speakingMessageIndex === i
 
             const cleanMarkdown = msg.content.replace(/\[SCHRITT\s+\d\/\d\]/g, '')
-
+      
+            if (mode === 'exam') {
+              return (
+                <div className="flex flex-col h-screen bg-gray p-6">
+                  <h1 className="text-xl font-bold mb-4">📝 Probeklausur</h1>
+            
+                  {examState === 'running' && (
+                    <>
+                      {examQuestions.map((q, i) => (
+                        <div key={i} className="mb-4">
+                          <p className="font-semibold">{i + 1}. {q.frage}</p>
+                          <input
+                            value={answers[i]}
+                            onChange={(e) => {
+                              const newAnswers = [...answers]
+                              newAnswers[i] = e.target.value
+                              setAnswers(newAnswers)
+                            }}
+                            className="border p-2 rounded mt-1 w-full"
+                          />
+                        </div>
+                      ))}
+            
+                      <button
+                        onClick={() => {
+                          let points = 0
+                          examQuestions.forEach((q, i) => {
+                            if (answers[i] === q.lösung) points++
+                          })
+                          setScore(points)
+                          setExamState('finished')
+                        }}
+                        className="bg-primary text-white px-4 py-2 rounded mt-4"
+                      >
+                        ✅ Abgeben
+                      </button>
+                    </>
+                  )}
+            
+                  {examState === 'finished' && (
+                    <div>
+                      <h2 className="text-lg font-bold mb-2">Ergebnis</h2>
+                      <p>{score} / {examQuestions.length} richtig</p>
+            
+                      <button
+                        onClick={() => {
+                          setAnswers(['', '', '', ''])
+                          setScore(null)
+                          setExamState('running')
+                        }}
+                        className="mt-4 bg-mint text-white px-4 py-2 rounded"
+                      >
+                        🔄 Neue Klausur
+                      </button>
+            
+                      <button
+                        onClick={() => {
+                          setMode('chat')
+                          setExamState('idle')
+                        }}
+                        className="mt-2 block text-sm text-gray-500 underline"
+                      >
+                        Zurück zum Chat
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+}
             if (isError) {
               return (
                 <div key={i} className="flex justify-start">
@@ -302,7 +391,13 @@ export function ChatPage() {
                     )}
                   </div>
                   {isLastAssistant && !loading && (
-                    <HotKeyButtons onHotkey={sendHotkey} disabled={loading} currentStep={step || 1} />
+                    <HotKeyButtons 
+                      onHotkey={sendHotkey} 
+                      disabled={loading} 
+                      currentStep={step || 1}
+                      mode={mode}
+                      examState={examState}
+                    />
                   )}
                 </div>
               </div>
