@@ -2,12 +2,34 @@ interface Props {
   onHotkey: (type: string) => void
   disabled?: boolean
   currentStep?: number
+  mode?: 'chat' | 'exam'
+  examState?: 'idle' | 'running' | 'finished'
 }
 
-export function HotKeyButtons({ onHotkey, disabled, currentStep = 1 }: Props) {
+export function HotKeyButtons({ onHotkey, disabled, currentStep = 1, mode = 'chat',
+  examState = 'idle' }: Props) {
   const isFinalStep = currentStep === 3
 
-  const hotkeys = isFinalStep ? [
+let hotkeys = []
+
+if (mode === 'exam') {
+  if (examState === 'running') {
+    hotkeys = [
+      { type: 'TIP', label: 'Tipp', emoji: '💡', color: 'bg-primary/10 text-primary border-primary/30 hover:bg-primary/20' },
+      { type: 'SKIP', label: 'Überspringen', emoji: '➡️', color: 'bg-mint/10 text-mint border-mint/30 hover:bg-mint/20' },
+      { type: 'EXPLAIN', label: 'Erklärung', emoji: '❓', color: 'bg-orange/10 text-orange border-orange/30 hover:bg-orange/20' },
+    ]
+  } else if (examState === 'finished') {
+    hotkeys = [
+      { type: 'SHOW_SOLUTIONS', label: 'Lösungen', emoji: '✅', color: 'bg-primary/10 text-primary border-primary/30 hover:bg-primary/20' },
+      { type: 'NEW_EXAM', label: 'Neue Klausur', emoji: '🔄', color: 'bg-mint/10 text-mint border-mint/30 hover:bg-mint/20' },
+      { type: 'EXPLAIN', label: 'Erklärung', emoji: '🧠', color: 'bg-orange/10 text-orange border-orange/30 hover:bg-orange/20' },
+    ]
+  }
+} else {
+  const isFinalStep = currentStep === 3
+
+  hotkeys = isFinalStep ? [
     { type: 'MORE_EXAMPLE', label: 'Noch ein Beispiel', emoji: '🔄', color: 'bg-primary/10 text-primary border-primary/30 hover:bg-primary/20' },
     { type: 'NEW_TOPIC', label: 'Anderes Thema', emoji: '🚀', color: 'bg-mint/10 text-mint border-mint/30 hover:bg-mint/20' },
   ] : [
@@ -15,6 +37,7 @@ export function HotKeyButtons({ onHotkey, disabled, currentStep = 1 }: Props) {
     { type: 'SIMPLIFY', label: 'Nicht verstanden', emoji: '❓', color: 'bg-orange/10 text-orange border-orange/30 hover:bg-orange/20' },
     { type: 'EXAMPLE', label: 'Zeig Beispiel', emoji: '💡', color: 'bg-primary/10 text-primary border-primary/30 hover:bg-primary/20' },
   ]
+}
 
   return (
     <div className="flex flex-wrap gap-2 mt-2">
