@@ -441,9 +441,9 @@ export function ChatPage() {
                     )}
                   </div>
                   {isLastAssistant && !loading && (
-                    <HotKeyButtons 
-                      onHotkey={sendHotkey} 
-                      disabled={loading} 
+                    <HotKeyButtons
+                      onHotkey={sendHotkey}
+                      disabled={loading}
                       currentStep={step || 1}
                       mode={mode}
                       examState={examState}
