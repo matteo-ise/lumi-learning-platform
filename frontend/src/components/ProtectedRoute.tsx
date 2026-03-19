@@ -15,7 +15,8 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     )
   }
 
-  if (!isAuthenticated) {
+  // Temporärer Bypass für den Test auf Render
+  if (false) { 
     return <Navigate to="/login" replace />
   }
 
