@@ -248,24 +248,70 @@ export function ChatPage() {
 
         {/* Messages area */}
         <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+                    {/* 👉 PROBEKLAUSUR */}
+          {mode === 'exam' && examState === 'running' && (
+            <div className="bg-white p-4 rounded-2xl shadow-md mb-4">
+              <h2 className="font-bold text-lg mb-2">📝 Probeklausur</h2>
+          
+              {[
+                "5 + 3 = ?",
+                "10 - 4 = ?",
+                "2 + 6 = ?"
+              ].map((q, i) => (
+                <div key={i} className="mb-3">
+                  <p>{q}</p>
+                  <input
+                    value={answers[i]}
+                    onChange={(e) => {
+                      const newAnswers = [...answers]
+                      newAnswers[i] = e.target.value
+                      setAnswers(newAnswers)
+                    }}
+                    className="border px-2 py-1 rounded w-full"
+                  />
+                </div>
+              ))}
+          
+              <button
+                onClick={() => {
+                  const correct = ['8', '6', '8']
+                  let points = 0
+                  answers.forEach((a, i) => {
+                    if (a === correct[i]) points++
+                  })
+                  setScore(points)
+                  setExamState('finished')
+                }}
+                className="mt-3 bg-mint text-white px-4 py-2 rounded-xl font-bold"
+              >
+                ✅ Abgeben
+              </button>
+            </div>
+          )}
+          {mode === 'exam' && examState === 'finished' && (
+            <div className="bg-white p-4 rounded-2xl shadow-md mb-4">
+              <h2 className="font-bold text-lg">🎉 Ergebnis</h2>
+              <p>Du hast {score}/3 Punkte!</p>
+            </div>
+          )}
           {!hasMessages && !loading && (
             <div className="text-center text-dark/40 pt-16">
               <div className="text-5xl mb-3">{avatarEmoji}</div>
               <p className="text-lg font-semibold">Schreib mir deine erste Frage!</p>
               <p className="text-sm mt-1">Ich helfe dir Schritt für Schritt.</p>
-  
-            <button
-              onClick={() => {
-                setMode('exam')
-                setExamState('running')
-              }}
-              className="mt-6 bg-primary text-white px-6 py-3 rounded-2xl font-bold hover:bg-primary/90"
-            >
-      📝 Probeklausur starten
-    </button>
-  </div>
-)}
-
+          
+              {/* 👉 STARTBUTTON */}
+              <button
+                onClick={() => {
+                  setMode('exam')
+                  setExamState('running')
+                }}
+                className="mt-4 bg-primary text-white px-4 py-2 rounded-xl font-bold"
+              >
+                📝 Probeklausur starten
+              </button>
+            </div>
+          )}
           {/* Mobile Timeline (Top) */}
           {hasMessages && currentStep > 0 && (
             <div className="sm:hidden flex justify-center mb-6 bg-white p-3 rounded-2xl shadow-sm">
