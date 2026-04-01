@@ -37,7 +37,8 @@ LUMI ist eine innovative, KI-gestützte Nachhilfeplattform, die speziell für Sc
    - `cd backend`
    - `pip install -r requirements.txt`
    - `.env` anlegen mit `GEMINI_API_KEY` und `FIREBASE_SERVICE_ACCOUNT_JSON` (oder `serviceAccountKey.json` bereitstellen).
-   - `uvicorn main:app --reload` (Port 8000)
+   - `uvicorn main:app --reload` (Port 8000, wenn du im `backend/`-Ordner bist)
+   - Alternativ vom Projekt-Root: `uvicorn backend.main:app --reload`
 2. **Frontend:** 
    - `cd frontend`
    - `npm install`

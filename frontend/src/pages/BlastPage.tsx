@@ -1,7 +1,12 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../services/api';
-import { BlastGame } from '../components/BlastGame/BlastGame';
+
+const BlastGame = lazy(() =>
+  import('../components/BlastGame/BlastGame').then((module) => ({
+    default: module.BlastGame,
+  })),
+);
 
 interface Profile {
   grade: number;
@@ -44,7 +49,9 @@ export function BlastPage() {
         {loading ? (
           <div className="text-xl animate-pulse text-dark/50 font-bold">Lade Mission...</div>
         ) : (
-          <BlastGame grade={grade || 2} />
+          <Suspense fallback={<div className="text-xl animate-pulse text-dark/50 font-bold">Starte Phaser-Antrieb...</div>}>
+            <BlastGame grade={grade || 2} />
+          </Suspense>
         )}
       </div>
     </div>

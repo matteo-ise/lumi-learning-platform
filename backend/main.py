@@ -3,6 +3,7 @@ import os
 import sqlite3
 import traceback
 import json
+import re
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timedelta, date
 from typing import List, Optional
@@ -17,7 +18,27 @@ import firebase_admin
 from firebase_admin import auth, credentials
 
 # --- INITIALIZATION ---
-load_dotenv()
+BASE_DIR = os.path.dirname(__file__)
+load_dotenv(os.path.join(BASE_DIR, ".env"))
+
+def get_gemini_api_key() -> str:
+    """Load and validate Gemini API key from backend/.env."""
+    key = (os.getenv("GEMINI_API_KEY") or "").strip()
+    if key.startswith('"') and key.endswith('"'):
+        key = key[1:-1].strip()
+    if key.startswith("'") and key.endswith("'"):
+        key = key[1:-1].strip()
+
+    if not key:
+        raise RuntimeError("GEMINI_API_KEY fehlt in backend/.env")
+    if "DEIN_" in key or key.endswith("_KEY"):
+        raise RuntimeError("GEMINI_API_KEY ist noch ein Platzhalter in backend/.env")
+    # Typical Google API keys start with AIza and have a longer token body.
+    if not re.match(r"^AIza[0-9A-Za-z_-]{20,}$", key):
+        raise RuntimeError(
+            "GEMINI_API_KEY hat ein ungueltiges Format. Nutze einen echten API-Key aus Google AI Studio (nicht Firebase apiKey)."
+        )
+    return key
 
 # --- FIREBASE SETUP ---
 def init_firebase():
@@ -343,37 +364,50 @@ async def chat(body: ChatRequest, uid: str = Depends(get_current_user)):
 
             user_parts = [genai.types.Part(text=body.message)]
             if body.image_base64:
-                img_raw = body.image_base64.split(",")[1] if "," in body.image_base64 else body.image_base64
-                user_parts.append(genai.types.Part.from_bytes(data=base64.b64decode(img_raw), mime_type="image/jpeg"))
+                # Support data URLs from the frontend and preserve the real mime type
+                # (e.g. image/png), otherwise Gemini may reject the request as INVALID_ARGUMENT.
+                mime_type = "image/jpeg"
+                img_raw = body.image_base64
+                if "," in body.image_base64:
+                    header, data = body.image_base64.split(",", 1)
+                    img_raw = data
+                    if header.startswith("data:") and ";base64" in header:
+                        mime_type = header[5:].split(";", 1)[0] or mime_type
+                user_parts.append(genai.types.Part.from_bytes(data=base64.b64decode(img_raw), mime_type=mime_type))
             
             # --- GEMINI CALL WITH ROBUST FALLBACK ---
             ai_res = ""
             errors = []
             models_to_try = [
-                "models/gemini-2.5-flash",
-                "models/gemini-2.0-flash",
-                "models/gemini-1.5-flash",
-                "models/gemini-1.5-flash-8b"
+                "gemini-2.5-flash",
+                "gemini-2.5-flash-lite",
+                "gemini-2.0-flash-001",
             ]
             
-            client = genai.Client(api_key=os.getenv("GEMINI_API_KEY", ""))
-
-            for model_name in models_to_try:
-                try:
-                    res = client.models.generate_content(
-                        model=model_name, 
-                        contents=[genai.types.Content(role="user", parts=user_parts)], 
-                        config=genai.types.GenerateContentConfig(system_instruction=sys_p)
-                    )
-                    ai_res = res.text or ""
-                    if ai_res: break
-                except Exception as gemini_err:
-                    errors.append(f"{model_name}: {str(gemini_err)[:50]}")
-                    continue
+            client = genai.Client(api_key=get_gemini_api_key())
+            try:
+                for model_name in models_to_try:
+                    try:
+                        res = client.models.generate_content(
+                            model=model_name, 
+                            contents=[genai.types.Content(role="user", parts=user_parts)], 
+                            config=genai.types.GenerateContentConfig(system_instruction=sys_p)
+                        )
+                        ai_res = res.text or ""
+                        if ai_res: break
+                    except Exception as gemini_err:
+                        errors.append(f"{model_name}: {str(gemini_err)[:220]}")
+                        continue
+            finally:
+                client.close()
             
             if not ai_res:
                 combined_errors = "\n".join(errors)
-                if "429" in combined_errors or "RESOURCE_EXHAUSTED" in combined_errors:
+                if "API key not valid" in combined_errors:
+                    ai_res = "❌ **Gemini API-Key ungültig.**\n\nBitte prüfe `backend/.env`:\n- Nutze einen echten Key aus **Google AI Studio**\n- Nutze **nicht** den Firebase `apiKey` aus dem Frontend\n- Starte das Backend danach komplett neu."
+                elif "API_KEY_INVALID" in combined_errors:
+                    ai_res = "❌ **Gemini API-Key ungültig.**\n\nBitte prüfe `backend/.env` und verwende einen AI-Studio-Key."
+                elif "429" in combined_errors or "RESOURCE_EXHAUSTED" in combined_errors:
                     ai_res = "⚠️ **LUMI macht gerade eine Pause.**\n\nMein KI-Limit für heute ist leider erreicht. Bitte versuche es in ein paar Minuten (oder mit einem neuen API-Key) wieder! 😊"
                 else:
                     ai_res = f"❌ **KI-Fehler:** Ich konnte keine Verbindung zu Google herstellen.\n\nDetails:\n```\n{combined_errors[:150]}...\n```"
@@ -459,32 +493,38 @@ async def chat_hotkey(body: HotkeyRequest, uid: str = Depends(get_current_user))
             if last_content:
                 user_message += f"\n\nDeine letzte Antwort war:\n{last_content}"
 
-            client = genai.Client(api_key=os.getenv("GEMINI_API_KEY", ""))
+            client = genai.Client(api_key=get_gemini_api_key())
             ai_res = ""
             errors = []
             models_to_try = [
-                "models/gemini-2.5-flash",
-                "models/gemini-2.0-flash",
-                "models/gemini-1.5-flash",
-                "models/gemini-1.5-flash-8b",
+                "gemini-2.5-flash",
+                "gemini-2.5-flash-lite",
+                "gemini-2.0-flash-001",
             ]
-            for model_name in models_to_try:
-                try:
-                    res = client.models.generate_content(
-                        model=model_name,
-                        contents=[genai.types.Content(role="user", parts=[genai.types.Part(text=user_message)])],
-                        config=genai.types.GenerateContentConfig(system_instruction=sys_p),
-                    )
-                    ai_res = res.text or ""
-                    if ai_res:
-                        break
-                except Exception as gemini_err:
-                    errors.append(f"{model_name}: {str(gemini_err)[:50]}")
-                    continue
+            try:
+                for model_name in models_to_try:
+                    try:
+                        res = client.models.generate_content(
+                            model=model_name,
+                            contents=[genai.types.Content(role="user", parts=[genai.types.Part(text=user_message)])],
+                            config=genai.types.GenerateContentConfig(system_instruction=sys_p),
+                        )
+                        ai_res = res.text or ""
+                        if ai_res:
+                            break
+                    except Exception as gemini_err:
+                        errors.append(f"{model_name}: {str(gemini_err)[:220]}")
+                        continue
+            finally:
+                client.close()
 
             if not ai_res:
                 combined_errors = "\n".join(errors)
-                if "429" in combined_errors or "RESOURCE_EXHAUSTED" in combined_errors:
+                if "API key not valid" in combined_errors:
+                    ai_res = "❌ **Gemini API-Key ungültig.**\n\nBitte prüfe `backend/.env`:\n- Nutze einen echten Key aus **Google AI Studio**\n- Nutze **nicht** den Firebase `apiKey` aus dem Frontend\n- Starte das Backend danach komplett neu."
+                elif "API_KEY_INVALID" in combined_errors:
+                    ai_res = "❌ **Gemini API-Key ungültig.**\n\nBitte prüfe `backend/.env` und verwende einen AI-Studio-Key."
+                elif "429" in combined_errors or "RESOURCE_EXHAUSTED" in combined_errors:
                     ai_res = "⚠️ **LUMI macht gerade eine Pause.**\n\nMein KI-Limit für heute ist leider erreicht. Bitte versuche es in ein paar Minuten wieder! 😊"
                 else:
                     ai_res = f"❌ **KI-Fehler:** Ich konnte keine Verbindung zu Google herstellen.\n\nDetails:\n```\n{combined_errors[:150]}...\n```"

@@ -1,8 +1,32 @@
-import { auth } from './firebase'
+import { auth, onAuthStateChanged } from './firebase'
 
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 
+async function waitForAuthInitialization(timeoutMs = 1500): Promise<void> {
+  if (auth.currentUser) return
+
+  await new Promise<void>((resolve) => {
+    let done = false
+    const finish = () => {
+      if (done) return
+      done = true
+      resolve()
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, () => {
+      unsubscribe()
+      finish()
+    })
+
+    window.setTimeout(() => {
+      unsubscribe()
+      finish()
+    }, timeoutMs)
+  })
+}
+
 export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  await waitForAuthInitialization()
   const currentUser = auth.currentUser
   let token = localStorage.getItem('lumi_token')
   
@@ -32,7 +56,7 @@ export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): 
     return res.json()
   } catch (err: any) {
     console.error("Fetch Error:", fullUrl, err)
-    // Zeige die URL im Fehler an, damit wir sehen, wohin er schickt
+    if (err instanceof Error) throw err
     throw new Error(`Verbindung fehlgeschlagen zu: ${fullUrl}. Prüfe VITE_API_URL!`)
   }
 }
