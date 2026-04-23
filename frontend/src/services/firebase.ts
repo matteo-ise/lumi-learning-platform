@@ -1,14 +1,13 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 
-// --- DEINE CONFIG VON FIREBASE HIER EINTRAGEN ---
 const firebaseConfig = {
-  apiKey: "AIzaSyB6sttzydLl1kZd3bE7Suzr_862MIBk3PI",
-  authDomain: "lumi-ki.firebaseapp.com",
-  projectId: "lumi-ki",
-  storageBucket: "lumi-ki.firebasestorage.app",
-  messagingSenderId: "626497851298",
-  appId: "1:626497851298:web:17b809eb62b850bd772cfb"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
 // Initialize Firebase only if not already initialized

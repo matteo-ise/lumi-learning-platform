@@ -7,3 +7,5 @@ __pycache__/
 lumi.db
 .DS_Store
 serviceAccountKey.json
+backend/serviceAccountKey.json
+LUMI-LOCAL-SETUP.md
