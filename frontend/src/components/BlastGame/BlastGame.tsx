@@ -1,143 +1,178 @@
-/**
- * DEVELOPER NOTE - SPRINT 6:
- * This is the core container for the "Lumi Blast" math game. 
- * The basic game loop (Start -> Playing -> End) is already implemented.
- * 
- * TODO for the next dev:
- * 1. GAMEPLAY & ANIMATIONS: 
- *    - Add a countdown timer for each question to increase "Blast" excitement.
- *    - Implement "Combo" multipliers for fast consecutive correct answers.
- *    - Add Framer Motion or CSS animations for the 🚀 (e.g., it should "launch" on correct answers).
- *    - Add sound effects for correct/wrong answers.
- * 
- * 2. FEEDBACK:
- *    - Show immediate visual feedback (Green/Red) after an answer is selected.
- *    - Add a small delay after an answer before showing the next question.
- * 
- * 3. BACKEND INTEGRATION:
- *    - Use apiFetch to POST the final score to `/api/blast/results` (you might need to create this endpoint in main.py).
- *    - The 'grade' prop is automatically passed from the user profile.
- */
-
-import { useState, useEffect } from 'react';
-import { apiFetch } from '../../services/api';
-import { MATH_TASKS } from './math_tasks';
-import type { MathTask } from './math_tasks';
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type Phaser from 'phaser'
+import { apiFetch } from '../../services/api'
+import { getBlastQuestionsForGrade } from './math_tasks'
+import { createBlastGame } from './phaser/createBlastGame'
+import type { BlastGameResult } from './phaser/types'
 
 interface BlastGameProps {
-  grade: number;
+  grade: number
 }
 
+type ShellState = 'start' | 'playing' | 'end'
+
 export function BlastGame({ grade }: BlastGameProps) {
-  const [tasks, setTasks] = useState<MathTask[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [score, setScore] = useState(0);
-  const [gameState, setGameState] = useState<'start' | 'playing' | 'end'>('start');
+  const mountRef = useRef<HTMLDivElement | null>(null)
+  const gameRef = useRef<Phaser.Game | null>(null)
+  const [shellState, setShellState] = useState<ShellState>('start')
+  const [sessionSeed, setSessionSeed] = useState(0)
+  const [finalResult, setFinalResult] = useState<BlastGameResult | null>(null)
+
+  const questions = useMemo(() => {
+    return getBlastQuestionsForGrade(grade)
+  }, [grade, sessionSeed])
 
   useEffect(() => {
-    // Initialize tasks based on grade
-    const gradeTasks = MATH_TASKS[grade] || MATH_TASKS[2]; // fallback to grade 2
-    setTasks([...gradeTasks].sort(() => Math.random() - 0.5));
-  }, [grade]);
+    setShellState('start')
+    setFinalResult(null)
+    setSessionSeed(0)
+  }, [grade])
 
-  const handleStart = () => {
-    setGameState('playing');
-    setCurrentIndex(0);
-    setScore(0);
-  };
+  useEffect(() => {
+    if (shellState !== 'playing' || !mountRef.current) return
 
-  const handleAnswer = (selected: number) => {
-    let nextScore = score;
-    if (selected === tasks[currentIndex].answer) {
-      nextScore = score + 1;
-      setScore(nextScore);
+    const game = createBlastGame({
+      parent: mountRef.current,
+      questions,
+      onGameOver: (result) => {
+        setFinalResult(result)
+        setShellState('end')
+
+        apiFetch('/api/blast/results', {
+          method: 'POST',
+          body: JSON.stringify({
+            score: result.score,
+            total_questions: result.totalQuestions,
+          }),
+        }).catch(console.error)
+      },
+    })
+
+    gameRef.current = game
+
+    return () => {
+      gameRef.current?.destroy(true)
+      gameRef.current = null
     }
+  }, [questions, shellState])
 
-    if (currentIndex + 1 < tasks.length) {
-      setCurrentIndex((prev) => prev + 1);
-    } else {
-      setGameState('end');
-      // Save score to backend
-      apiFetch('/api/blast/results', {
-        method: 'POST',
-        body: JSON.stringify({ score: nextScore, total_questions: tasks.length }),
-      }).catch(console.error);
-    }
-  };
-
-  if (gameState === 'start') {
-    return (
-      <div className="bg-white rounded-3xl p-8 shadow-xl max-w-lg w-full text-center border-4 border-primary/20">
-        <div className="text-6xl mb-6 animate-bounce">🚀</div>
-        <h2 className="text-3xl font-extrabold text-dark mb-4">Bereit für den Blast?</h2>
-        <p className="text-lg text-dark/60 mb-8">
-          Du bist in Klasse {grade}. Wir haben {tasks.length} Mathe-Aufgaben für dich vorbereitet!
-        </p>
-        <button
-          onClick={handleStart}
-          className="w-full py-4 rounded-2xl bg-primary text-white text-xl font-bold hover:bg-primary/90 transition-all shadow-lg hover:shadow-primary/30"
-        >
-          Spiel starten! 🎮
-        </button>
-      </div>
-    );
+  const startGame = () => {
+    setFinalResult(null)
+    setShellState('playing')
   }
 
-  if (gameState === 'playing' && tasks.length > 0) {
-    const currentTask = tasks[currentIndex];
-    return (
-      <div className="bg-white rounded-3xl p-8 shadow-xl max-w-lg w-full text-center border-4 border-primary/20">
-        <div className="flex justify-between items-center mb-6">
-          <span className="bg-gray-100 px-4 py-1 rounded-full text-sm font-bold text-dark/50">
-            Aufgabe {currentIndex + 1} von {tasks.length}
-          </span>
-          <span className="text-primary font-extrabold text-xl">
-            Punkte: {score}
-          </span>
-        </div>
-        
-        <h2 className="text-5xl font-extrabold text-dark mb-10 py-10 bg-gray-50 rounded-2xl">
-          {currentTask.question}
-        </h2>
-
-        <div className="grid grid-cols-2 gap-4">
-          {currentTask.options.map((opt) => (
-            <button
-              key={opt}
-              onClick={() => handleAnswer(opt)}
-              className="py-6 rounded-2xl border-2 border-gray-100 text-2xl font-bold text-dark hover:border-primary hover:bg-primary/5 transition-all"
-            >
-              {opt}
-            </button>
-          ))}
-        </div>
-      </div>
-    );
+  const restartGame = () => {
+    setSessionSeed((prev) => prev + 1)
+    setFinalResult(null)
+    setShellState('playing')
   }
 
-  if (gameState === 'end') {
-    return (
-      <div className="bg-white rounded-3xl p-8 shadow-xl max-w-lg w-full text-center border-4 border-primary/20">
-        <div className="text-6xl mb-6">🏆</div>
-        <h2 className="text-3xl font-extrabold text-dark mb-2">Super gemacht!</h2>
-        <p className="text-xl text-dark/60 mb-8">
-          Du hast {score} von {tasks.length} Aufgaben richtig gelöst.
-        </p>
-        <button
-          onClick={handleStart}
-          className="w-full py-4 rounded-2xl bg-primary text-white text-xl font-bold hover:bg-primary/90 transition-all mb-3"
-        >
-          Nochmal spielen 🔄
-        </button>
-        <button
-          onClick={() => window.history.back()}
-          className="w-full py-4 rounded-2xl bg-gray-100 text-dark/60 text-xl font-bold hover:bg-gray-200 transition-all"
-        >
-          Zurück zur Übersicht
-        </button>
-      </div>
-    );
-  }
+  return (
+    <div className="w-full max-w-6xl">
+      <div className="relative overflow-hidden rounded-[2rem] border border-cyan-300/20 bg-slate-950 shadow-[0_30px_120px_rgba(15,23,42,0.55)]">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.18),_transparent_35%),radial-gradient(circle_at_bottom,_rgba(168,85,247,0.16),_transparent_28%)]" />
 
-  return null;
+        <div
+          ref={mountRef}
+          className={`aspect-[16/10] w-full bg-[linear-gradient(180deg,#020617_0%,#0f172a_45%,#111827_100%)] ${
+            shellState === 'playing' ? 'block' : 'hidden'
+          }`}
+        />
+
+        {shellState !== 'playing' && (
+          <div className="relative flex aspect-[16/10] w-full items-center justify-center px-6 py-10">
+            <div className="absolute inset-0 overflow-hidden">
+              <div className="absolute left-[10%] top-[14%] h-3 w-3 rounded-full bg-cyan-200 shadow-[0_0_18px_6px_rgba(103,232,249,0.45)]" />
+              <div className="absolute right-[16%] top-[20%] h-2 w-2 rounded-full bg-violet-200 shadow-[0_0_16px_5px_rgba(196,181,253,0.35)]" />
+              <div className="absolute bottom-[18%] left-[20%] h-4 w-4 rounded-full bg-amber-200 shadow-[0_0_20px_7px_rgba(253,230,138,0.25)]" />
+              <div className="absolute inset-x-0 bottom-0 h-32 bg-[radial-gradient(circle_at_center,_rgba(14,165,233,0.20),_transparent_55%)]" />
+            </div>
+
+            {shellState === 'start' && (
+              <div className="relative z-10 max-w-2xl text-center text-white">
+                <p className="mb-3 text-sm font-black uppercase tracking-[0.4em] text-cyan-300">
+                  Space Arcade Math Mission
+                </p>
+                <h2 className="mb-4 text-4xl font-black tracking-tight sm:text-6xl">
+                  LUMI BLAST
+                </h2>
+                <p className="mx-auto mb-8 max-w-xl text-base text-slate-300 sm:text-lg">
+                  Steuere deine Rakete durchs All und schieße den richtigen Antwort-Kometen ab. Du
+                  startest mit 3 Leben und spielst mit Aufgaben passend zu Klasse {grade}.
+                </p>
+
+                <div className="mb-8 grid gap-3 text-left text-sm text-slate-200 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <p className="mb-1 font-black text-cyan-300">4 Ziele</p>
+                    <p>Pro Runde erscheinen vier Asteroiden mit möglichen Antworten.</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <p className="mb-1 font-black text-cyan-300">3 Leben</p>
+                    <p>Jeder falsche Treffer kostet ein Leben. Bei 0 ist Game Over.</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <p className="mb-1 font-black text-cyan-300">Arcade Flow</p>
+                    <p>Richtige Treffer geben Punkte, lösen Explosionen aus und starten sofort die nächste Runde.</p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={startGame}
+                  className="rounded-full bg-cyan-400 px-8 py-4 text-lg font-black text-slate-950 transition hover:scale-[1.02] hover:bg-cyan-300"
+                >
+                  Mission starten
+                </button>
+              </div>
+            )}
+
+            {shellState === 'end' && finalResult && (
+              <div className="relative z-10 max-w-xl text-center text-white">
+                <p className="mb-3 text-sm font-black uppercase tracking-[0.4em] text-amber-300">
+                  Mission beendet
+                </p>
+                <h2 className="mb-4 text-4xl font-black tracking-tight sm:text-5xl">
+                  Endscore: {finalResult.score}
+                </h2>
+                <p className="mb-6 text-slate-300">
+                  Du hast {finalResult.correctAnswers} von {finalResult.totalQuestions} Aufgaben
+                  getroffen. Beste Combo: x{finalResult.bestCombo}. Verbleibende Leben:{' '}
+                  {finalResult.livesRemaining}.
+                </p>
+
+                <div className="mb-8 grid gap-3 text-sm text-slate-200 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <p className="mb-1 font-black text-cyan-300">Treffer</p>
+                    <p>{finalResult.correctAnswers}</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <p className="mb-1 font-black text-cyan-300">Fehler</p>
+                    <p>{finalResult.wrongAnswers}</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <p className="mb-1 font-black text-cyan-300">Leben</p>
+                    <p>{finalResult.livesRemaining}</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col justify-center gap-3 sm:flex-row">
+                  <button
+                    onClick={restartGame}
+                    className="rounded-full bg-cyan-400 px-8 py-4 text-lg font-black text-slate-950 transition hover:scale-[1.02] hover:bg-cyan-300"
+                  >
+                    Nochmal spielen
+                  </button>
+                  <button
+                    onClick={() => window.history.back()}
+                    className="rounded-full border border-white/15 bg-white/5 px-8 py-4 text-lg font-black text-white transition hover:bg-white/10"
+                  >
+                    Zurück
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
