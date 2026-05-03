@@ -87,7 +87,7 @@ flowchart TB
     end
 
     subgraph AI["AI Layer"]
-        Gemini["Gemini 2.5 Flash\n+ Fallback Chain"]
+        Gemini["Gemini 2.5 Flash\n+ 2.5 Flash-Lite\n+ 2.0 Flash Fallback"]
         Vision["Gemini Vision\n(Bildanalyse)"]
     end
 
@@ -409,10 +409,10 @@ erDiagram
 
 ### Gemini Fallback-Chain
 
-LUMI nutzt eine robuste Fallback-Strategie mit vier Gemini-Modellen. Falls ein Modell nicht verfügbar ist (z.B. durch Quota-Limits), wird automatisch das nächste Modell in der Kette verwendet:
+LUMI nutzt eine robuste Fallback-Strategie mit drei Gemini-Modellen. Falls ein Modell nicht verfügbar ist (z.B. durch Quota-Limits), wird automatisch das nächste Modell in der Kette verwendet:
 
 ```
-gemini-2.5-flash → gemini-2.0-flash → gemini-1.5-flash → gemini-1.5-flash-8b
+gemini-2.5-flash → gemini-2.5-flash-lite → gemini-2.0-flash
 ```
 
 ### Meta-Prompt System

@@ -351,9 +351,8 @@ async def chat(body: ChatRequest, uid: str = Depends(get_current_user)):
             errors = []
             models_to_try = [
                 "models/gemini-2.5-flash",
+                "models/gemini-2.5-flash-lite",
                 "models/gemini-2.0-flash",
-                "models/gemini-1.5-flash",
-                "models/gemini-1.5-flash-8b"
             ]
             
             client = genai.Client(api_key=os.getenv("GEMINI_API_KEY", ""))
@@ -464,9 +463,8 @@ async def chat_hotkey(body: HotkeyRequest, uid: str = Depends(get_current_user))
             errors = []
             models_to_try = [
                 "models/gemini-2.5-flash",
+                "models/gemini-2.5-flash-lite",
                 "models/gemini-2.0-flash",
-                "models/gemini-1.5-flash",
-                "models/gemini-1.5-flash-8b",
             ]
             for model_name in models_to_try:
                 try:
