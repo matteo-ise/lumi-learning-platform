@@ -107,6 +107,14 @@ def init_db():
                 total_questions INTEGER DEFAULT 10,
                 played_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
+            CREATE TABLE IF NOT EXISTS exam_results (
+                id SERIAL PRIMARY KEY,
+                user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+                score INTEGER NOT NULL,
+                total INTEGER NOT NULL,
+                grade INTEGER NOT NULL,
+                taken_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
         """
         schema_sqlite = schema_pg.replace("SERIAL PRIMARY KEY", "INTEGER PRIMARY KEY AUTOINCREMENT")
         try:
@@ -195,6 +203,11 @@ class BlastResultRequest(BaseModel):
     score: int
     total_questions: int
 
+class ExamResultRequest(BaseModel):
+    score: int
+    total: int
+    grade: int
+
 SUBJECT_META = {
     "mathe": {"label": "Mathe", "emoji": "🔢", "color": "blue"},
     "deutsch": {"label": "Deutsch", "emoji": "📖", "color": "green"},
@@ -265,6 +278,16 @@ async def save_blast_result(body: BlastResultRequest, uid: str = Depends(get_cur
         cur = conn.cursor()
         if DATABASE_URL: cur.execute("INSERT INTO blast_results (user_id, score, total_questions) VALUES (%s, %s, %s)", (uid, body.score, body.total_questions))
         else: conn.execute("INSERT INTO blast_results (user_id, score, total_questions) VALUES (?, ?, ?)", (uid, body.score, body.total_questions)); conn.commit()
+    return {"ok": True}
+
+@app.post("/api/exam/results")
+async def save_exam_result(body: ExamResultRequest, uid: str = Depends(get_current_user)):
+    with get_db() as conn:
+        if DATABASE_URL:
+            conn.cursor().execute("INSERT INTO exam_results (user_id, score, total, grade) VALUES (%s, %s, %s, %s)", (uid, body.score, body.total, body.grade))
+        else:
+            conn.execute("INSERT INTO exam_results (user_id, score, total, grade) VALUES (?, ?, ?, ?)", (uid, body.score, body.total, body.grade))
+            conn.commit()
     return {"ok": True}
 
 @app.get("/api/subjects/all")

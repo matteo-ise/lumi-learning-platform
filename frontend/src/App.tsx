@@ -6,6 +6,7 @@ import { WizardPage } from './pages/WizardPage'
 import { ChatPage } from './pages/ChatPage'
 import { SubjectChatPage } from './pages/SubjectChatPage'
 import { BlastPage } from './pages/BlastPage'
+import { ExamPage } from './pages/ExamPage'
 import { ProtectedRoute } from './components/ProtectedRoute'
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
         <Route path="/app/fach/:subject" element={<ProtectedRoute><SubjectChatPage /></ProtectedRoute>} />
         <Route path="/app/kurs/:id/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
         <Route path="/app/blast" element={<ProtectedRoute><BlastPage /></ProtectedRoute>} />
+        <Route path="/app/pruefung" element={<ProtectedRoute><ExamPage /></ProtectedRoute>} />
       </Routes>
     </BrowserRouter>
   )

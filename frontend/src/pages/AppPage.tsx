@@ -119,18 +119,35 @@ export function AppPage() {
                   <span className="text-2xl">{s.emoji}</span>
                 </div>
                 <p className="text-base font-bold text-dark">{s.label}</p>
-                {s.id === 'mathe' && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); navigate('/app/blast') }}
-                    className="mt-2 bg-orange text-white text-xs font-bold px-3 py-1 rounded-full hover:bg-orange/80 transition-colors"
-                  >
-                    🚀 Blast!
-                  </button>
-                )}
               </button>
             )
           })}
         </div>
+
+        {/* Mathe-Aktionen */}
+        {subjects.some((s) => s.id === 'mathe') && (
+          <div className="mt-10">
+            <h2 className="text-xl font-bold text-dark text-center mb-4">Mathe-Aktionen</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <button
+                onClick={() => navigate('/app/blast')}
+                className="bg-gradient-to-br from-orange-400 via-orange to-red-500 text-white rounded-3xl p-6 text-center transition-all hover:shadow-lg hover:scale-105"
+              >
+                <span className="text-4xl block mb-2">🚀</span>
+                <p className="text-lg font-extrabold">LUMI Blast</p>
+                <p className="text-sm text-white/80 mt-1">Mathe-Arcade-Spiel mit Punkten</p>
+              </button>
+              <button
+                onClick={() => navigate('/app/pruefung')}
+                className="bg-gradient-to-br from-primary via-indigo-500 to-violet-600 text-white rounded-3xl p-6 text-center transition-all hover:shadow-lg hover:scale-105"
+              >
+                <span className="text-4xl block mb-2">🎓</span>
+                <p className="text-lg font-extrabold">LUMI Exam</p>
+                <p className="text-sm text-white/80 mt-1">20-Minuten-Test nach KMK-Standards</p>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

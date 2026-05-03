@@ -66,6 +66,18 @@ LUMI ist eine KI-gestützte Nachhilfeplattform für Grundschüler der Klassen 1&
       <p>Mathe, Deutsch, Englisch, Sachunterricht, Kunst, Musik, Sport &amp; Religion/Ethik &mdash; mit individuellen Lehrplänen.</p>
     </td>
   </tr>
+  <tr>
+    <td align="center" width="25%">
+      <h3>LUMI Exam</h3>
+      <p>KMK-basierter Prüfungsmodus mit 20-Minuten-Timer, Bundesland-Schwierigkeitsfaktor &amp; automatischer Auswertung.</p>
+    </td>
+    <td align="center" width="25%">
+      <h3>iPad &amp; Apple Pencil</h3>
+      <p>Handschrifteingabe via iPadOS Scribble. Karo-Papier-Design &amp; vergrößertes Eingabefeld für natürliches Schreiben.</p>
+    </td>
+    <td align="center" colspan="2">
+    </td>
+  </tr>
 </table>
 
 ---
@@ -242,6 +254,7 @@ lumi-learning-platform/
 │   │   │   ├── AppPage.tsx
 │   │   │   ├── BlastPage.tsx
 │   │   │   ├── ChatPage.tsx
+│   │   │   ├── ExamPage.tsx
 │   │   │   ├── LandingPage.tsx
 │   │   │   ├── LoginPage.tsx
 │   │   │   ├── SubjectChatPage.tsx
@@ -313,11 +326,12 @@ lumi-learning-platform/
 | `POST` | `/api/chat` | Nachricht senden (Text + optionales Bild) |
 | `POST` | `/api/chat/hotkey` | HotKey-Aktion auslösen |
 
-### Gaming
+### Gaming & Prüfung
 
 | Method | Endpoint | Beschreibung |
 |--------|----------|-------------|
 | `POST` | `/api/blast/results` | LUMI Blast Spielergebnis speichern |
+| `POST` | `/api/exam/results` | Prüfungsergebnis speichern (Score, Total, Klasse) |
 
 ### Sonstiges
 
@@ -395,11 +409,20 @@ erDiagram
         INTEGER total_questions
         TIMESTAMP played_at
     }
+    exam_results {
+        SERIAL id PK
+        TEXT user_id FK
+        INTEGER score
+        INTEGER total
+        INTEGER grade
+        TIMESTAMP taken_at
+    }
 
     users ||--o| profiles : "hat"
     users ||--o{ courses : "erstellt"
     users ||--o{ messages : "sendet"
     users ||--o{ blast_results : "spielt"
+    users ||--o{ exam_results : "absolviert"
     courses ||--o{ messages : "enthält"
 ```
 

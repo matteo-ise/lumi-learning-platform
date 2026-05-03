@@ -22,6 +22,25 @@ const FEDERAL_STATES = [
   'Sachsen-Anhalt', 'Schleswig-Holstein', 'Thüringen',
 ]
 
+const LEHRPLAN_URLS: Record<string, string> = {
+  'Baden-Württemberg': 'https://www.bildungsplaene-bw.de/,Lde/Startseite/BP2016BW_ALLG/BP2016BW_ALLG_GS',
+  'Bayern': 'https://www.lehrplanplus.bayern.de/schulart/grundschule',
+  'Berlin': 'https://bildungsserver.berlin-brandenburg.de/rlp-online/startseite',
+  'Brandenburg': 'https://bildungsserver.berlin-brandenburg.de/rlp-online/startseite',
+  'Bremen': 'https://www.lis.bremen.de/schulqualitaet/curriculumentwicklung/bildungsplaene-702',
+  'Hamburg': 'https://www.hamburg.de/resource/blob/31566/c8271883ba7f049e1b71fa484b7e4b3a/bildungsplan-grundschule-mathematik-data.pdf',
+  'Hessen': 'https://kultusministerium.hessen.de/schulsystem/bildungsstandards-und-kerncurricula',
+  'Mecklenburg-Vorpommern': 'https://www.bildung-mv.de/lehrer/schule-und-unterricht/rahmenlehrplaene/',
+  'Niedersachsen': 'https://cuvo.nibis.de/cuvo.php?skey_lev0_0=Schulbereich&svalue_lev0_0=Primarbereich',
+  'Nordrhein-Westfalen': 'https://www.schulentwicklung.nrw.de/lehrplaene/lehrplannavigator-grundschule/',
+  'Rheinland-Pfalz': 'https://grundschule.bildung-rp.de/rahmenplan.html',
+  'Saarland': 'https://www.saarland.de/mbk/DE/portale/bildungsserver/unterricht-und-bildungsthemen/lehrplaene-und-handreichungen/grundschule/grundschule_node.html',
+  'Sachsen': 'https://www.schulportal.sachsen.de/lplandb/',
+  'Sachsen-Anhalt': 'https://www.bildung-lsa.de/lehrplaene___rahmenrichtlinien.html',
+  'Schleswig-Holstein': 'https://fachportal.lernnetz.de/sh/fachanforderungen.html',
+  'Thüringen': 'https://www.schulportal-thueringen.de/lehrplaene',
+}
+
 const LEARNING_TYPES = [
   { id: 'kurz',      label: 'Kurz & knapp',     emoji: '⚡', desc: 'Direkt auf den Punkt' },
   { id: 'ausfuehrlich', label: 'Ausführlich',   emoji: '📚', desc: 'Alles genau erklärt' },
@@ -192,6 +211,25 @@ export function WizardPage() {
                 <option value="">Bitte wählen...</option>
                 {FEDERAL_STATES.map((s) => (<option key={s} value={s}>{s}</option>))}
               </select>
+              {data.federal_state && (
+                <div className="mt-3 text-xs text-dark/50 bg-blue-50 rounded-xl px-4 py-2 text-left leading-relaxed">
+                  <p>
+                    Die landesspezifische Anpassung in LUMI basiert auf dem IQB-Bildungstrend 2021 (Mittelwerte je Bundesland)
+                    und der für dein Land verbindlichen Erstschreibschrift.
+                    Sie ersetzt nicht den Lehrplan deines Landes – Quelle: IQB / KMK.
+                  </p>
+                  {LEHRPLAN_URLS[data.federal_state] && (
+                    <a
+                      href={LEHRPLAN_URLS[data.federal_state]}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block mt-2 text-primary font-semibold hover:underline"
+                    >
+                      Lehrplan ansehen →
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
