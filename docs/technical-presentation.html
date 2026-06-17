@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LUMI – Technical Presentation</title>
+  <style>
+    /* ── Reset & base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #020617;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      color: #e2e8f0;
+    }
+
+    /* ── Slide shell ── */
+    .slide {
+      width: 960px;
+      height: 540px;
+      background: #0f172a;
+      padding: 4rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      margin: 0 auto 2px;
+      page-break-after: always;
+      break-after: page;
+    }
+
+    /* ── Slide variants ── */
+    .slide-hero {
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+      align-items: center;
+      text-align: center;
+    }
+    .slide-accent {
+      border-left: 6px solid #38bdf8;
+    }
+    .slide-dark {
+      background: #0a1628;
+    }
+
+    /* ── Decorative corner accent ── */
+    .slide::before {
+      content: '';
+      position: absolute;
+      top: 0; right: 0;
+      width: 180px; height: 180px;
+      background: radial-gradient(circle at top right, rgba(56,189,248,0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    /* ── Slide number ── */
+    .slide-num {
+      position: absolute;
+      bottom: 1.25rem;
+      right: 1.75rem;
+      font-size: 0.75rem;
+      color: #475569;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── Logo tag ── */
+    .logo-tag {
+      position: absolute;
+      top: 1.25rem;
+      left: 1.75rem;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      color: #38bdf8;
+      text-transform: uppercase;
+    }
+
+    /* ── Typography ── */
+    h1 {
+      font-size: 3rem;
+      font-weight: 800;
+      color: #f0f9ff;
+      line-height: 1.1;
+      margin-bottom: 1rem;
+    }
+    h2 {
+      font-size: 1.875rem;
+      font-weight: 700;
+      color: #38bdf8;
+      margin-bottom: 1.5rem;
+      line-height: 1.2;
+    }
+    h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #94a3b8;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+    .subtitle {
+      font-size: 1.25rem;
+      color: #94a3b8;
+      margin-bottom: 1.5rem;
+    }
+    .hero-badge {
+      display: inline-block;
+      background: rgba(56,189,248,0.15);
+      border: 1px solid rgba(56,189,248,0.4);
+      color: #38bdf8;
+      font-size: 0.85rem;
+      font-weight: 600;
+      padding: 0.3rem 1rem;
+      border-radius: 999px;
+      margin-bottom: 1.5rem;
+      letter-spacing: 0.06em;
+    }
+
+    /* ── Bullet list ── */
+    ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    li {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      font-size: 1.05rem;
+      color: #cbd5e1;
+      line-height: 1.5;
+    }
+    li::before {
+      content: '▸';
+      color: #38bdf8;
+      font-size: 0.9rem;
+      margin-top: 0.15rem;
+      flex-shrink: 0;
+    }
+    li strong {
+      color: #f1f5f9;
+    }
+
+    /* ── Diagram helpers ── */
+    .diagram {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin-top: 1.5rem;
+      flex-wrap: nowrap;
+      overflow: hidden;
+    }
+    .d-box {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 0.55rem 0.9rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .d-box-accent {
+      background: rgba(56,189,248,0.12);
+      border-color: #38bdf8;
+      color: #38bdf8;
+    }
+    .d-arrow {
+      font-size: 1.1rem;
+      color: #475569;
+      padding: 0 0.4rem;
+      flex-shrink: 0;
+    }
+
+    /* ── Data-flow diagram ── */
+    .flow-col {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+    .flow-row {
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+
+    /* ── Two-column layout ── */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+      align-items: start;
+    }
+
+    /* ── Highlight pill ── */
+    .pill {
+      display: inline-block;
+      background: rgba(56,189,248,0.15);
+      border: 1px solid rgba(56,189,248,0.35);
+      border-radius: 6px;
+      padding: 0.2rem 0.65rem;
+      font-size: 0.82rem;
+      color: #38bdf8;
+      font-weight: 600;
+      margin-right: 0.3rem;
+    }
+    .pill-green {
+      background: rgba(34,197,94,0.12);
+      border-color: rgba(34,197,94,0.35);
+      color: #4ade80;
+    }
+    .pill-amber {
+      background: rgba(251,191,36,0.12);
+      border-color: rgba(251,191,36,0.35);
+      color: #fbbf24;
+    }
+
+    /* ── Step boxes ── */
+    .step-row {
+      display: flex;
+      gap: 1rem;
+      margin-top: 1.25rem;
+    }
+    .step-box {
+      flex: 1;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-top: 3px solid #38bdf8;
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+    }
+    .step-box h3 {
+      font-size: 0.8rem;
+      color: #38bdf8;
+      margin-bottom: 0.4rem;
+    }
+    .step-box p {
+      font-size: 0.82rem;
+      color: #94a3b8;
+      line-height: 1.4;
+    }
+
+    /* ── Thank-you slide ── */
+    .thank-you-title {
+      font-size: 3.5rem;
+      font-weight: 900;
+      color: #38bdf8;
+      line-height: 1;
+      margin-bottom: 0.75rem;
+    }
+    .divider {
+      width: 80px;
+      height: 3px;
+      background: #38bdf8;
+      margin: 1rem auto;
+    }
+
+    /* ── Print / PPTX export ── */
+    @media print {
+      body { background: #0f172a; }
+      .slide { margin: 0; break-after: page; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════
+     SLIDE 1 – Hero / Title
+══════════════════════════════════════════════════ -->
+<section class="slide slide-hero">
+  <div class="logo-tag">LUMI · Technical Presentation</div>
+  <div class="hero-badge">AI-Powered Learning Platform · Grades 1–4</div>
+  <h1>LUMI</h1>
+  <p class="subtitle">Intelligent Tutoring for Primary School Students</p>
+  <p style="font-size:0.9rem;color:#475569;">Gemini 2.0 Flash · FastAPI · React 18 · Firebase</p>
+  <div class="slide-num">1 / 13</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════
+     SLIDE 2 – The Learning Gap Problem
+══════════════════════════════════════════════════ -->
+<section class="slide slide-accent">
+  <div class="logo-tag">LUMI · Problem</div>
+  <h3>The Challenge</h3>
+  <h2>The Learning Gap Problem</h2>
+  <ul>
+    <li><strong>1 in 4</strong> primary school students (grades 1–4) falls significantly behind peers without personalized support</li>
+    <li><strong>Private tutoring</strong> costs €30–60/hour — unaffordable for most families</li>
+    <li><strong>Classroom teachers</strong> cannot provide 1-on-1 instruction at scale (avg. 25 students per class)</li>
+    <li><strong>Existing apps</strong> deliver static exercises with no adaptive feedback or Socratic guidance</li>
+    <li><strong>Motivation gap:</strong> children disengage quickly without gamification and instant positive reinforcement</li>
+  </ul>
+  <div class="slide-num">2 / 13</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════
+     SLIDE 3 – LUMI's Approach
+══════════════════════════════════════════════════ -->
+<section class="slide slide-dark slide-accent">
+  <div class="logo-tag">LUMI · Solution</div>
+  <h3>The Solution</h3>
+  <h2>LUMI's Approach</h2>
+  <ul>
+    <li><strong>Socratic Method:</strong> LUMI never gives the answer directly — it guides students step-by-step through targeted questions</li>
+    <li><strong>AI-Powered Personalization:</strong> Each session is shaped by the student's grade, learning style, and curriculum (Bundesland)</li>
+    <li><strong>3-Step Tutoring Method:</strong> Foundation → Deepening → Practice — mirrors expert human tutors</li>
+    <li><strong>Multimodal Interaction:</strong> Voice input/output, image recognition (homework photos), Apple Pencil support</li>
+    <li><strong>Gamification Loop:</strong> LUMI Blast math game + daily streaks keep motivation high</li>
+  </ul>
+  <div class="slide-num">3 / 13</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════
+     SLIDE 4 – Architecture Overview
+══════════════════════════════════════════════════ -->
+<section class="slide slide-accent">
+  <div class="logo-tag">LUMI · Architecture</div>
+  <h3>System Design</h3>
+  <h2>Architecture Overview</h2>
+  <ul>
+    <li><strong>Frontend:</strong> React 18 + TypeScript (Vite) — SPA served via CDN / Vercel</li>
+    <li><strong>Backend:</strong> FastAPI (Python 3.12) — stateless REST API, deployable on Railway / Render</li>
+    <li><strong>AI Layer:</strong> Google Gemini 2.0 Flash — vision + text, managed via Google GenAI SDK</li>
+    <li><strong>Auth:</strong> Firebase Authentication (Google OAuth 2.0) — JWT validated on every request</li>
+  </ul>
+  <!-- Architecture flow diagram -->
+  <div class="diagram" style="margin-top:1.25rem;">
+    <div class="d-box">👤 Student<br/>(Browser / iPad)</div>
+    <div class="d-arrow">→</div>
+    <div class="d-box d-box-accent">React 18<br/>Frontend</div>
+    <div class="d-arrow">→</div>
+    <div class="d-box">FastAPI<br/>Backend</div>
+    <div class="d-arrow">→</div>
+    <div class="d-box d-box-accent">Gemini 2.0<br/>Flash API</div>
+    <div class="d-arrow">→</div>
+    <div class="d-box">Structured<br/>Response</div>
+    <div class="d-arrow">→</div>
+    <div class="d-box d-box-accent">Student<br/>UI</div>
+  </div>
+  <div class="slide-num">4 / 13</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════
+     SLIDE 5 – Model Selection
+══════════════════════════════════════════════════ -->
+<section class="slide slide-dark slide-accent">
+  <div class="logo-tag">LUMI · Model Selection</div>
+  <h3>Why Gemini 2.0 Flash?</h3>
+  <h2>Model Selection Rationale</h2>
+  <ul>
+    <li>
+      <span class="pill-green pill">25× Cheaper</span>
+      <strong>Cost:</strong> Gemini 2.0 Flash vs. GPT-4o — enables free-tier sustainable deployment
+    </li>
+    <li>
+      <span class="pill">Vision</span>
+      <strong>Multimodal:</strong> Native image understanding for homework photo analysis (no OCR pipeline needed)
+    </li>
+    <li>
+      <span class="pill">Quality</span>
+      <strong>Accuracy:</strong> Excellent for grades 1–4 curriculum — clear, age-appropriate explanations out of the box
+    </li>
+    <li>
+      <span class="pill-amber pill">Speed</span>
+      <strong>Latency:</strong> &lt;2 s median response — critical for maintaining child attention span
+    </li>
+    <li>
+      <span class="pill">No RAG</span>
+      <strong>Architecture:</strong> Full curriculum context fits in Flash's 1M token context — eliminates vector DB complexity
+    </li>
+  </ul>
+  <div class="slide-num">5 / 13</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════
+     SLIDE 6 – Prompt Engineering
+══════════════════════════════════════════════════ -->
+<section class="slide slide-accent">
+  <div class="logo-tag">LUMI · Prompt Engineering</div>
+  <h3>AI Design</h3>
+  <h2>Prompt Engineering: Meta-Prompts</h2>
+  <ul>
+    <li><strong>Wizard Profile:</strong> Onboarding collects name, grade (1–4), Bundesland, avatar, learning style</li>
+    <li><strong>Meta-Prompt Injection:</strong> Profile fields are serialized and prepended to every system prompt automatically</li>
+    <li><strong>Curriculum Context:</strong> Grade-specific Markdown lesson plans loaded from <code style="color:#38bdf8;font-size:0.9em;">backend/knowledge/</code> into prompt</li>
+    <li><strong>Socratic Constraint:</strong> System prompt hard-encodes the no-direct-answer rule + 3-step method contract</li>
+  </ul>
+  <!-- Data-flow diagram -->
+  <div class="diagram" style="margin-top:1rem;">
+    <div class="d-box d-box-accent">Wizard<br/>Profile</div>
+    <div class="d-arrow">→</div>
+    <div class="d-box">Meta-Prompt<br/>Builder</div>
+    <div class="d-arrow">→</div>
+    <div class="d-box d-box-accent">System<br/>Prompt</div>
+    <div class="d-arrow">+</div>
+    <div class="d-box">Curriculum<br/>Context</div>
+    <div class="d-arrow">→</div>
+    <div class="d-box d-box-accent">Gemini<br/>Generation</div>
+  </div>
+  <div class="slide-num">6 / 13</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════
+     SLIDE 7 – Feature 1: 3-Step Tutoring Method
+══════════════════════════════════════════════════ -->
+<section class="slide slide-dark slide-accent">
+  <div class="logo-tag">LUMI · Feature 1</div>
+  <h3>Core Pedagogy</h3>
+  <h2>3-Step Tutoring Method</h2>
+  <ul>
+    <li><strong>Structured Learning Arc:</strong> Every topic follows Foundation → Deepening → Practice — no shortcuts</li>
+    <li><strong>HotKey Buttons:</strong> "Got it ✓", "Example please", "Harder" drive flow without free-text friction</li>
+    <li><strong>Adaptive Pace:</strong> Student responses determine whether LUMI revisits, advances, or introduces a new angle</li>
+    <li><strong>Socratic Enforcement:</strong> Backend prompt rejects any request to reveal answers; reroutes to guiding questions</li>
+  </ul>
+  <div class="step-row">
+    <div class="step-box">
+      <h3>① Foundation</h3>
+      <p>Core concept introduced with age-appropriate analogy. LUMI checks prior knowledge first.</p>
+    </div>
+    <div class="step-box">
+      <h3>② Deepening</h3>
+      <p>Guided Socratic dialogue — questions narrow understanding gaps iteratively.</p>
+    </div>
+    <div class="step-box">
+      <h3>③ Practice</h3>
+      <p>Student solves a problem independently; LUMI gives structured feedback, not solutions.</p>
+    </div>
+  </div>
+  <div class="slide-num">7 / 13</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════
+     SLIDE 8 – Feature 2: Multimodal I/O
+══════════════════════════════════════════════════ -->
+<section class="slide slide-accent">
+  <div class="logo-tag">LUMI · Feature 2</div>
+  <h3>Input / Output Modes</h3>
+  <h2>Multimodal Interaction</h2>
+  <ul>
+    <li>
+      <strong>Voice Input (STT):</strong> Web Speech API — children speak questions; no keyboard required for grades 1–2
+    </li>
+    <li>
+      <strong>Voice Output (TTS):</strong> Browser speech synthesis reads LUMI's responses aloud for pre-readers
+    </li>
+    <li>
+      <strong>Image Recognition:</strong> Students photograph homework worksheets; Gemini Vision analyzes and responds inline
+    </li>
+    <li>
+      <strong>Apple Pencil / Stylus:</strong> iPad-optimized graph-paper chat background; draw directly in the chat area
+    </li>
+    <li>
+      <strong>No Extra APIs:</strong> All modalities powered by Gemini Vision + Web Platform APIs — zero third-party cost
+    </li>
+  </ul>
+  <div class="slide-num">8 / 13</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════
+     SLIDE 9 – Feature 3: Gamification
+══════════════════════════════════════════════════ -->
+<section class="slide slide-dark slide-accent">
+  <div class="logo-tag">LUMI · Feature 3</div>
+  <h3>Motivation Systems</h3>
+  <h2>Gamification</h2>
+  <ul>
+    <li>
+      <strong>LUMI Blast:</strong> HTML5 Canvas math-shooter game — students answer grade-level equations to fire at targets
+    </li>
+    <li>
+      <strong>Adaptive Difficulty:</strong> Game questions are pulled from the same curriculum context as the tutor sessions
+    </li>
+    <li>
+      <strong>Streak System:</strong> Daily login + learning session tracked; streak counter shown prominently on dashboard
+    </li>
+    <li>
+      <strong>Avatars &amp; Badges:</strong> Chosen during onboarding wizard; unlockable rewards tied to streak milestones
+    </li>
+    <li>
+      <strong>Intrinsic Motivation:</strong> Gamification layers are optional — core tutoring works independently of game progress
+    </li>
+  </ul>
+  <div class="slide-num">9 / 13</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════
+     SLIDE 10 – Feature 4: Personalization
+══════════════════════════════════════════════════ -->
+<section class="slide slide-accent">
+  <div class="logo-tag">LUMI · Feature 4</div>
+  <h3>Adaptive Learning</h3>
+  <h2>Personalization Engine</h2>
+  <ul>
+    <li>
+      <strong>Onboarding Wizard:</strong> 5-step flow captures name, avatar, grade (1–4), German Bundesland, learning style preference
+    </li>
+    <li>
+      <strong>Context-Aware Responses:</strong> Gemini receives full student profile on every request — responses match vocabulary level exactly
+    </li>
+    <li>
+      <strong>Curriculum Alignment:</strong> Bundesland selection loads the matching state syllabus into the knowledge context
+    </li>
+    <li>
+      <strong>Learning Style Modes:</strong> Visual / Auditory / Reading-Writing profiles alter explanation style in the system prompt
+    </li>
+    <li>
+      <strong>Profile Persistence:</strong> Profile stored in Firebase / SQLite; consistent across devices and sessions
+    </li>
+  </ul>
+  <div class="slide-num">10 / 13</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════
+     SLIDE 11 – Tech Stack Deep Dive
+══════════════════════════════════════════════════ -->
+<section class="slide slide-dark slide-accent">
+  <div class="logo-tag">LUMI · Tech Stack</div>
+  <h3>Engineering Details</h3>
+  <h2>Tech Stack Deep Dive</h2>
+  <div class="two-col">
+    <div>
+      <h3 style="color:#38bdf8;margin-bottom:0.75rem;">Frontend</h3>
+      <ul>
+        <li><strong>React 18</strong> + TypeScript (Vite build)</li>
+        <li><strong>TailwindCSS</strong> — Nunito / Quicksand fonts, child-friendly UI</li>
+        <li><strong>Firebase Auth</strong> — Google OAuth 2.0, JWT refresh</li>
+        <li><strong>Web Speech API</strong> — STT + TTS, no third-party SDK</li>
+        <li><strong>HTML5 Canvas</strong> — LUMI Blast game renderer</li>
+      </ul>
+    </div>
+    <div>
+      <h3 style="color:#38bdf8;margin-bottom:0.75rem;">Backend</h3>
+      <ul>
+        <li><strong>FastAPI</strong> Python 3.12 — async, OpenAPI docs auto-generated</li>
+        <li><strong>SQLite</strong> (dev) / <strong>PostgreSQL/Neon</strong> (prod) hybrid</li>
+        <li><strong>Google GenAI SDK</strong> — Gemini 2.0 Flash + Vision</li>
+        <li><strong>Firebase Admin SDK</strong> — server-side JWT verification</li>
+        <li><strong>Markdown knowledge files</strong> — curriculum context, no vector DB</li>
+      </ul>
+    </div>
+  </div>
+  <div class="slide-num">11 / 13</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════
+     SLIDE 12 – Deployment & Scalability
+══════════════════════════════════════════════════ -->
+<section class="slide slide-accent" style="background:linear-gradient(135deg,#0f172a 0%,#0c2340 100%);">
+  <div class="logo-tag">LUMI · Deployment</div>
+  <h3>Production &amp; Roadmap</h3>
+  <h2>Deployment &amp; Scalability</h2>
+  <div class="two-col">
+    <div>
+      <h3 style="color:#94a3b8;margin-bottom:0.6rem;font-size:0.85rem;">Current Setup</h3>
+      <ul>
+        <li><strong>Frontend:</strong> Vercel CDN — global edge, zero cold starts</li>
+        <li><strong>Backend:</strong> Railway / Render — single FastAPI instance (stateless)</li>
+        <li><strong>DB:</strong> Neon (serverless PostgreSQL) — auto-scales to zero</li>
+        <li><strong>Auth:</strong> Firebase — Google-managed, GDPR/DSGVO-compliant</li>
+      </ul>
+    </div>
+    <div>
+      <h3 style="color:#94a3b8;margin-bottom:0.6rem;font-size:0.85rem;">Scale-Out Roadmap</h3>
+      <ul>
+        <li><strong>Horizontal:</strong> Stateless API → Kubernetes / Cloud Run replicas</li>
+        <li><strong>Caching:</strong> Redis layer for repeated curriculum context blocks</li>
+        <li><strong>Streaming:</strong> Gemini streaming responses for &lt;300 ms TTFB</li>
+        <li><strong>Analytics:</strong> BigQuery pipeline for learning progress dashboards</li>
+      </ul>
+    </div>
+  </div>
+  <div class="slide-num">12 / 13</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════
+     SLIDE 13 – Thank You
+══════════════════════════════════════════════════ -->
+<section class="slide slide-hero" style="background:linear-gradient(135deg,#0f172a 0%,#1a3a5c 60%,#0f172a 100%);">
+  <div class="logo-tag">LUMI</div>
+  <div class="thank-you-title">Thank You</div>
+  <div class="divider"></div>
+  <p class="subtitle" style="margin-bottom:0.5rem;">Questions &amp; Discussion</p>
+  <p style="font-size:0.9rem;color:#475569;margin-top:1rem;">
+    🐬 LUMI – AI Tutoring Platform · Grades 1–4<br/>
+    Gemini 2.0 Flash · FastAPI · React 18 · Firebase Auth
+  </p>
+</section>
+
+</body>
+</html>
